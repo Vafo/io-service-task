@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(io-service)
+project(io_service)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# add_library(compiler_flags INTERFACE)
-# target_compile_features(compiler_flags INTERFACE cxx_std_11)
+add_library(io_service_compiler_flags INTERFACE)
+target_compile_features(io_service_compiler_flags INTERFACE cxx_std_20)
 
 # Include src folders
 add_subdirectory(src)
-# add_subdirectory(test)
+add_subdirectory(test)
 add_subdirectory(modules)
 
 include(FetchContent)
@@ -22,7 +22,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(io_service.app main.cpp)
+add_executable(io_service_app main.cpp)
 
-target_link_libraries(io_service.app io_service_impl module_concurrency compiler_flags)
+target_link_libraries(io_service_app io_service_impl module_concurrency io_service_compiler_flags)
 
