@@ -1,6 +1,8 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
+#include <iostream>
+
 #include <set>
 #include <queue>
 #include <stop_token>
@@ -50,8 +52,9 @@ public:
         
         /*notify about new task*/
         unique_lock<mutex> lock(m_queue_mutex);
-
-        m_queue.push(func, args...);
+        
+        invocable new_task(func, args...);
+        m_queue.push(new_task);
         m_queue_cv.notify_one(); /*notify one. one task = one thread*/
 
         return true;
@@ -73,13 +76,25 @@ public:
 
         if( is_in_pool ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
+            std::cout << "in pool called" << std::endl;
             func(args...);
         } else {
+            std::cout << "out pool called" << std::endl;
             post(func, args...);
         }
 
         return true;
     }
+
+    std::queue<invocable>::size_type task_size() {
+        using namespace concurrency;
+
+        lock_guard<mutex> lock(m_queue_mutex);
+        return m_queue.size();
+    }
+
+    bool empty()
+    { return task_size() == 0; }
 
 private:
 

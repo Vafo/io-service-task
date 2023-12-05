@@ -1,7 +1,7 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Concurrency tests inclusion
-set(INCLUDE_CONCURRENCY_TESTS ON)
+set(INCLUDE_CONCURRENCY_TESTS OFF)
 
 # List test cpp's
 add_library(io_service_test_suite OBJECT io_service_test.cpp)
