@@ -71,8 +71,8 @@ TEST_CASE("io_service: counting tasks", "[io_service]") {
 
 TEST_CASE("io_service: dispatch", "[io_service]") {
     const int num_iterations = 100;
-    const int num_tasks = 2;
-    const int num_threads = 5;
+    const int num_tasks = 50;
+    const int num_threads = 10;
     const int num_dispatch = 5;
     
     io_service serv;

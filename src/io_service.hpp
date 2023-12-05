@@ -76,10 +76,10 @@ public:
 
         if( is_in_pool ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
-            std::cout << "in pool called" << std::endl;
+            // std::cout << "in pool called" << std::endl;
             func(args...);
         } else {
-            std::cout << "out pool called" << std::endl;
+            // std::cout << "out pool called" << std::endl;
             post(func, args...);
         }
 
@@ -97,6 +97,9 @@ public:
     { return task_size() == 0; }
 
 private:
+
+    void _m_process_tasks();
+    void _m_release_from_pool();
 
     /*TODO: add thread_id for reference in m_thread_pool*/
     std::set<concurrency::thread::native_handle_type> m_thread_pool; 

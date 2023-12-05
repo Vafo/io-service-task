@@ -28,7 +28,7 @@ static inline void insert_cur_thread_to_pool(
 
 } // namespace detail 
 
-void io_service::run() {
+void io_service::_m_process_tasks() {
     /*add self to m_thread_pool*/
     detail::insert_cur_thread_to_pool(m_thread_pool, m_thread_pool_mutex);
 
@@ -60,6 +60,18 @@ void io_service::run() {
     }
 }
 
+void io_service::_m_release_from_pool() {
+    using namespace concurrency;
+
+    lock_guard<mutex> lock(m_thread_pool_mutex);
+
+    m_thread_pool.erase( this_thread::get_native_id() );
+}
+
+void io_service::run() {
+    _m_process_tasks();
+    _m_release_from_pool();
+}
 
 bool io_service::stop()
 { 
@@ -76,11 +88,15 @@ bool io_service::stop()
     std::queue<invocable> empty_queue;
     {
         /*TODO: use scoped_lock instead*/
-        std::lock(m_thread_pool_mutex, m_queue_mutex);
-        lock_guard<mutex> thread_lock(m_thread_pool_mutex, adopt_lock);
-        lock_guard<mutex> task_lock(m_queue_mutex, adopt_lock);
+        // std::lock(m_thread_pool_mutex, m_queue_mutex);
+        // lock_guard<mutex> thread_lock(m_thread_pool_mutex, adopt_lock);
+        // lock_guard<mutex> task_lock(m_queue_mutex, adopt_lock);
         
-        m_thread_pool.clear();
+        /*thread pool is not cleared by stop(). It is cleared by threads them selves*/
+        // m_thread_pool.clear();
+
+        lock_guard<mutex> task_lock(m_queue_mutex);
+
         m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
     }
 
