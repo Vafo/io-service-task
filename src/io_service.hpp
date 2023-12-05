@@ -52,7 +52,7 @@ public:
         unique_lock<mutex> lock(m_queue_mutex);
 
         m_queue.push(func, args...);
-        m_queue_cv.notify_all(); /*notify one by one, so that workers don't contend over single task*/
+        m_queue_cv.notify_one(); /*notify one. one task = one thread*/
 
         return true;
     }

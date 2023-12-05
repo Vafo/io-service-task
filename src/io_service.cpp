@@ -29,29 +29,25 @@ static inline void insert_cur_thread_to_pool(
 } // namespace detail 
 
 void io_service::run() {
-    using namespace concurrency;
-
     /*add self to m_thread_pool*/
     detail::insert_cur_thread_to_pool(m_thread_pool, m_thread_pool_mutex);
 
     while(true) {
         invocable cur_task;
 
-        /*wait for task*/
+        // Wait for task
         {
             using namespace concurrency;
 
-            // std::cout << "run: locking queue" << std::endl;
             unique_lock<mutex> lock(m_queue_mutex);
-            // std::cout << "run: queue locked" << std::endl;
             m_queue_cv.wait(
                 lock,
                 [&] () { 
-                    // std::cout << "wAITIN" << std::endl;
                     return (m_queue.size() > 0) || m_stop_src.stop_requested(); 
                 }
             );
-
+            
+            // Check if stop was requested
             if(m_stop_src.stop_requested())
                 return;
 
@@ -59,11 +55,8 @@ void io_service::run() {
             m_queue.pop();
         }
 
-        /*execute task*/
+        // Execute task
         cur_task();
-
-        if(m_stop_src.stop_requested())
-            return;
     }
 }
 
