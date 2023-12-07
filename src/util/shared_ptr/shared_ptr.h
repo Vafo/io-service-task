@@ -1,6 +1,8 @@
 #ifndef SHARED_PTR_H
 #define SHARED_PTR_H
 
+#include <atomic>
+
 #include <cassert>
 
 #include "checked_delete.hpp"
@@ -17,9 +19,10 @@ public:
 
     // allocate copy of obj
     shared_ptr(const T& obj): impl(NULL) {
+        using alloc_traits = std::allocator_traits< std::allocator<T> >; 
         // TODO: Reduce to 1 allocator call
-        T *ptr = allocator.allocate(1);
-        allocator.construct(ptr, obj);
+        T *ptr = alloc_traits::allocate(allocator, 1);
+        alloc_traits::construct(allocator, ptr, obj);
         impl = new shared_ptr_impl(ptr);
     }
 
@@ -30,10 +33,11 @@ public:
     template<typename D>
     shared_ptr(const D& obj): impl(NULL) {
         static_assert(std::is_base_of<T, D>::value);
+        using alloc_traits = std::allocator_traits< std::allocator<D> >; 
 
         std::allocator<D> d_allocator;
-        D *ptr = d_allocator.allocate(1);
-        d_allocator.construct(ptr, obj);
+        D *ptr = alloc_traits::allocate(d_allocator, 1);
+        alloc_traits::construct(d_allocator, ptr, obj);
         impl = new shared_ptr_impl(ptr);
     }
 
@@ -96,15 +100,16 @@ private:
         shared_ptr_impl(T *ptr): obj(ptr), ref_count(1) {}
 
         ~shared_ptr_impl() {
+            using alloc_traits = std::allocator_traits< std::allocator<T> >; 
             // checked delete
             check_if_deletable(obj);        
 
-            allocator.destroy(obj);
-            allocator.deallocate(obj, 1);
+            alloc_traits::destroy(allocator, obj);
+            alloc_traits::deallocate(allocator, obj, 1);
         }
 
         T *obj;
-        int ref_count;
+        alignas(int) std::atomic<int> ref_count;
         std::allocator<T> allocator;
     };
 
@@ -113,8 +118,11 @@ private:
 
     void dec_n_check() {
         if(impl != NULL) {
-            --impl->ref_count;
-            if(impl->ref_count == 0)
+            int stored_val = impl->ref_count.load();
+            while(!impl->ref_count.compare_exchange_weak(stored_val, stored_val - 1))
+                ;
+
+            if(stored_val - 1 == 0)
                 delete impl;
         }
     }

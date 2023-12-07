@@ -101,23 +101,20 @@ TEST_CASE("io_service: dispatch", "[io_service]") {
 
 
     // add workers
-    {
-        std::vector<concurrency::jthread> threads;
-        // how to avoid reservation (?)
-        threads.reserve(num_threads);
-        for(int i = 0; i < num_threads; ++i) {
-            // how to deal with move constructor (?)
-            // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
-            threads.emplace_back(worker_func, &serv);
-        }
-            
-
-        while(!serv.empty())
-            ; /*wait for threads to finish tasks*/
-
-        serv.stop();
+    std::vector<concurrency::jthread> threads;
+    // how to avoid reservation (?)
+    threads.reserve(num_threads);
+    for(int i = 0; i < num_threads; ++i) {
+        // how to deal with move constructor (?)
+        // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
+        threads.emplace_back(worker_func, &serv);
     }
+        
 
+    while(!serv.empty())
+        ; /*wait for threads to finish tasks*/
+
+    serv.stop();
     REQUIRE(a == num_tasks * num_dispatch * num_iterations);
 }
 
