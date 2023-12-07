@@ -20,28 +20,22 @@ namespace io_service {
 class io_service {
 
 public:
-    typedef util::shared_ptr<std::atomic<int>> thread_counter_ptr_type;
+    struct thread_counters {
+        thread_counters():
+            threads_total(0),
+            threads_idle(0)
+        {}
 
-    struct invocable {
-        invocable(): m_lambda() {}
+        alignas(int) std::atomic<int> threads_total;
+        alignas(int) std::atomic<int> threads_idle;
+    }; // struct thread_counters
 
-        template<typename Callable, typename ...Args>
-        invocable(Callable func, Args ...args) {
-            m_lambda = [=] () -> void { func(args...); };
-        }
+    typedef util::shared_ptr<thread_counters> thread_counters_ptr_type;
 
-        void operator()() {
-            m_lambda();
-        }
-
-    private:
-        func::function<void()> m_lambda;
-    }; // struct invocable
 
     io_service(): 
-        m_thread_counter_ptr( new std::atomic<int>(0) )
+        m_thread_counters_ptr( new thread_counters() )
     {}
-
 
     ~io_service() {
         stop();
@@ -79,7 +73,7 @@ public:
         return true;
     }
 
-    std::queue<invocable>::size_type task_size() {
+    std::size_t task_size() {
         using namespace concurrency;
 
         lock_guard<mutex> lock(m_queue_mutex);
@@ -89,7 +83,27 @@ public:
     bool empty()
     { return task_size() == 0; }
 
+    bool all_idle()
+    { return m_thread_counters_ptr->threads_total == m_thread_counters_ptr->threads_idle; }
+
 private:
+    struct invocable {
+        invocable(): m_lambda() {}
+
+        template<typename Callable, typename ...Args>
+        invocable(Callable func, Args ...args) {
+            m_lambda = [=] () -> void { func(args...); };
+        }
+
+        void operator()() {
+            m_lambda();
+        }
+
+    private:
+        func::function<void()> m_lambda;
+    }; // struct invocable
+
+
     void _m_insert_into_pool();
     bool _m_is_in_pool();
     void _m_release_from_pool();
@@ -102,7 +116,7 @@ private:
     std::stop_source m_stop_src;
 
     // TODO: consider alignment
-    thread_counter_ptr_type m_thread_counter_ptr;
+    thread_counters_ptr_type m_thread_counters_ptr;
 
 }; // class io_service
 

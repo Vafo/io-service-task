@@ -5,25 +5,25 @@
 
 namespace io_service {
 
-thread_local io_service::thread_counter_ptr_type thread_local_counter_ptr;
+thread_local io_service::thread_counters_ptr_type local_thread_counters_ptr;
 
 void io_service::_m_insert_into_pool() {
     // TODO
     /*modify thread local storage, so as to insert thread into pool*/
-    thread_local_counter_ptr = m_thread_counter_ptr;
-    (*thread_local_counter_ptr)++;
+    local_thread_counters_ptr = m_thread_counters_ptr;
+    local_thread_counters_ptr->threads_total++;
 }
 
 bool io_service::_m_is_in_pool() {
     // TODO
-    return thread_local_counter_ptr == m_thread_counter_ptr;
+    return local_thread_counters_ptr == m_thread_counters_ptr;
 }
 
 void io_service::_m_release_from_pool() {
     // TODO
     /*modify thread local storage, so as to release thread from pool*/
-    (*thread_local_counter_ptr)--;
-    thread_local_counter_ptr = thread_counter_ptr_type(); /*swap with empty*/
+    local_thread_counters_ptr->threads_total--;
+    local_thread_counters_ptr = thread_counters_ptr_type(); /*swap with empty*/
 }
 
 void io_service::_m_process_tasks() {
@@ -35,6 +35,8 @@ void io_service::_m_process_tasks() {
             using namespace concurrency;
 
             unique_lock<mutex> lock(m_queue_mutex);
+            
+            m_thread_counters_ptr->threads_idle++; /*thread is idle when it waits for task*/
             m_queue_cv.wait(
                 lock,
                 [&] () {
@@ -42,6 +44,7 @@ void io_service::_m_process_tasks() {
                     return (m_queue.size() > 0) || m_stop_src.stop_requested(); 
                 }
             );
+            m_thread_counters_ptr->threads_idle--; /*thread is not idle when it gets task*/
             
             // Check if stop was requested
             if(m_stop_src.stop_requested())
@@ -80,8 +83,8 @@ bool io_service::stop()
         m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
     }
 
-    // TODO: Wait for all threads to finish
-    while(*m_thread_counter_ptr != 0)
+    // TODO: Wait for all threads to terminate run()
+    while(m_thread_counters_ptr->threads_total != 0)
         ;
 
     return true;
