@@ -26,6 +26,14 @@ void io_service::_m_release_from_pool() {
     local_thread_counters_ptr = thread_counters_ptr_type(); /*swap with empty*/
 }
 
+void io_service::_m_check_service_valid_state(const char* func_name) {
+    if(m_stop_src.stop_requested()) {
+        std::string err_msg = func_name;
+        err_msg += "io_service: service was already stopped. It can not be populated";
+        throw std::runtime_error(err_msg);
+    }
+}
+
 void io_service::_m_process_tasks() {
     while(true) {
         invocable cur_task;

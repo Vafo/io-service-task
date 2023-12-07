@@ -48,6 +48,7 @@ public:
     template<typename Callable, typename ...Args>
     bool post(Callable func, Args ...args) {
         using namespace concurrency;
+        _m_check_service_valid_state(__FUNCTION__);
         
         /*notify about new task*/
         unique_lock<mutex> lock(m_queue_mutex);
@@ -61,7 +62,6 @@ public:
 
     template<typename Callable, typename ...Args>
     bool dispatch(Callable func, Args ...args) {
-        bool is_in_pool = false;
 
         if( _m_is_in_pool() ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
@@ -108,6 +108,7 @@ private:
     bool _m_is_in_pool();
     void _m_release_from_pool();
     void _m_process_tasks();
+    void _m_check_service_valid_state(const char* func_name);
     
     std::queue<invocable> m_queue;
     concurrency::condition_variable m_queue_cv;

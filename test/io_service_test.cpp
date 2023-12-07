@@ -257,6 +257,16 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
         finish_services();
 
         REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/);
+
+        SECTION("Reuse service objects"){
+            // Shuffled order
+            REQUIRE_THROWS(add_service1_tasks());
+            REQUIRE_THROWS(add_service2_tasks());
+
+            finish_services();
+
+            REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/); /*did not change*/
+        }
     }
 }
 
