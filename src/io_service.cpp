@@ -8,20 +8,15 @@ namespace io_service {
 thread_local io_service::thread_counters_ptr_type local_thread_counters_ptr;
 
 void io_service::_m_insert_into_pool() {
-    // TODO
-    /*modify thread local storage, so as to insert thread into pool*/
     local_thread_counters_ptr = m_thread_counters_ptr;
     local_thread_counters_ptr->threads_total++;
 }
 
 bool io_service::_m_is_in_pool() {
-    // TODO
     return local_thread_counters_ptr == m_thread_counters_ptr;
 }
 
 void io_service::_m_release_from_pool() {
-    // TODO
-    /*modify thread local storage, so as to release thread from pool*/
     local_thread_counters_ptr->threads_total--;
     local_thread_counters_ptr = thread_counters_ptr_type(); /*swap with empty*/
 }
