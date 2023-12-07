@@ -1,18 +1,18 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
-#include <iostream>
-
 #include <set>
 #include <queue>
 #include <stop_token>
 #include <mutex> /*std::lock*/
+#include <atomic>
 
 #include "thread.hpp"
 #include "mutex.hpp"
 #include "condition_variable.hpp"
 
 #include "function.hpp"
+#include "shared_ptr.h"
 
 
 namespace io_service {
@@ -20,23 +20,22 @@ namespace io_service {
 class io_service {
 
 public:
+    struct thread_counters {
+        thread_counters():
+            threads_total(0),
+            threads_idle(0)
+        {}
 
-    struct invocable {
-        invocable(): m_lambda() {}
+        alignas(int) std::atomic<int> threads_total;
+        alignas(int) std::atomic<int> threads_idle;
+    }; // struct thread_counters
 
-        template<typename Callable, typename ...Args>
-        invocable(Callable func, Args ...args) {
-            m_lambda = [=] () -> void { func(args...); };
-        }
+    typedef util::shared_ptr<thread_counters> thread_counters_ptr_type;
 
-        void operator()() {
-            m_lambda();
-        }
 
-    private:
-        func::function<void()> m_lambda;
-    }; // struct invocable
-
+    io_service(): 
+        m_thread_counters_ptr( new thread_counters() )
+    {}
 
     ~io_service() {
         stop();
@@ -64,29 +63,17 @@ public:
     bool dispatch(Callable func, Args ...args) {
         bool is_in_pool = false;
 
-        { /*query if current thread is already in pool*/
-            using namespace concurrency;
-
-            concurrency::thread::native_handle_type 
-                native_handle = concurrency::this_thread::get_native_id();
-            lock_guard<mutex> lock(m_thread_pool_mutex);
-
-            is_in_pool = m_thread_pool.contains(native_handle);
-        }
-
-        if( is_in_pool ) {
+        if( _m_is_in_pool() ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
-            // std::cout << "in pool called" << std::endl;
             func(args...);
         } else {
-            // std::cout << "out pool called" << std::endl;
             post(func, args...);
         }
 
         return true;
     }
 
-    std::queue<invocable>::size_type task_size() {
+    std::size_t task_size() {
         using namespace concurrency;
 
         lock_guard<mutex> lock(m_queue_mutex);
@@ -96,20 +83,40 @@ public:
     bool empty()
     { return task_size() == 0; }
 
+    bool all_idle()
+    { return m_thread_counters_ptr->threads_total == m_thread_counters_ptr->threads_idle; }
+
 private:
+    struct invocable {
+        invocable(): m_lambda() {}
 
-    void _m_process_tasks();
+        template<typename Callable, typename ...Args>
+        invocable(Callable func, Args ...args) {
+            m_lambda = [=] () -> void { func(args...); };
+        }
+
+        void operator()() {
+            m_lambda();
+        }
+
+    private:
+        func::function<void()> m_lambda;
+    }; // struct invocable
+
+
+    void _m_insert_into_pool();
+    bool _m_is_in_pool();
     void _m_release_from_pool();
-
-    /*TODO: add thread_id for reference in m_thread_pool*/
-    std::set<concurrency::thread::native_handle_type> m_thread_pool; 
-    concurrency::mutex m_thread_pool_mutex;
+    void _m_process_tasks();
     
     std::queue<invocable> m_queue;
     concurrency::condition_variable m_queue_cv;
     concurrency::mutex m_queue_mutex;
 
     std::stop_source m_stop_src;
+
+    // TODO: consider alignment
+    thread_counters_ptr_type m_thread_counters_ptr;
 
 }; // class io_service
 
