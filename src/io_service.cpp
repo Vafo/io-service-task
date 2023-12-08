@@ -22,7 +22,7 @@ void io_service::_m_release_from_pool() {
 }
 
 void io_service::_m_check_service_valid_state(const char* func_name) {
-    if(m_stop_src.stop_requested()) {
+    if(m_stop_flag == true) {
         std::string err_msg = func_name;
         err_msg += "io_service: service was already stopped. It can not be populated";
         throw std::runtime_error(err_msg);
@@ -41,21 +41,21 @@ void io_service::_m_process_tasks() {
 
             // Check if stop was requested, right before entering condition variable, which could be missed
             // Some threads might starve so much, that they will execute run() only after service was stopped
-            if(m_stop_src.stop_requested())
-                return;
+            // if(m_stop_flag == true)
+            //     return;
             
             m_thread_counters_ptr->threads_idle++; /*thread is idle when it waits for task*/
             m_queue_cv.wait(
                 lock,
                 [&] () {
                     /*stop_src does send notification to cond var so as to stop it from waiting tasks*/ 
-                    return (m_queue.size() > 0) || m_stop_src.stop_requested(); 
+                    return (m_queue.size() > 0) || (m_stop_flag == true); 
                 }
             );
             m_thread_counters_ptr->threads_idle--; /*thread is not idle when it gets task*/
             
             // Check if stop was requested
-            if(m_stop_src.stop_requested())
+            if(m_stop_flag == true)
                 return;
 
             cur_task = m_queue.front();
@@ -77,10 +77,10 @@ bool io_service::stop()
 { 
     using namespace concurrency;
 
-    m_stop_src.request_stop();
 
     { // notify about stop using m_queue_cv, since workers are waiting on it
         unique_lock<mutex> lock(m_queue_mutex);
+        m_stop_flag = true;
         m_queue_cv.notify_all(); /*notify all*/
     }
 

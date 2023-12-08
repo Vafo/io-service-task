@@ -34,7 +34,8 @@ public:
 
 
     io_service(): 
-        m_thread_counters_ptr( new thread_counters() /*TODO: consider alignment*/)
+        m_thread_counters_ptr( new thread_counters() /*TODO: consider alignment*/),
+        m_stop_flag(false)
     {}
 
     ~io_service() {
@@ -113,8 +114,8 @@ private:
     std::queue<invocable> m_queue;
     concurrency::condition_variable m_queue_cv;
     concurrency::mutex m_queue_mutex;
+    bool m_stop_flag; // tied to m_queue mutex and cond var
 
-    std::stop_source m_stop_src;
     thread_counters_ptr_type m_thread_counters_ptr;
 
 }; // class io_service
