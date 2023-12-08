@@ -38,6 +38,11 @@ void io_service::_m_process_tasks() {
             using namespace concurrency;
 
             unique_lock<mutex> lock(m_queue_mutex);
+
+            // Check if stop was requested, right before entering condition variable, which could be missed
+            // Some threads might starve so much, that they will execute run() only after service was stopped
+            if(m_stop_src.stop_requested())
+                return;
             
             m_thread_counters_ptr->threads_idle++; /*thread is idle when it waits for task*/
             m_queue_cv.wait(
