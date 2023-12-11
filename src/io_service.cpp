@@ -78,16 +78,16 @@ bool io_service::stop()
     using namespace concurrency;
 
 
+    std::queue<invocable> empty_queue;
     { // notify about stop using m_queue_cv, since workers are waiting on it
         unique_lock<mutex> lock(m_queue_mutex);
         m_stop_flag = true;
         m_queue_cv.notify_all(); /*notify all*/
-    }
+    // }
 
-    /*erase tasks queue*/
-    std::queue<invocable> empty_queue;
-    {
-        lock_guard<mutex> task_lock(m_queue_mutex);
+    // {
+        // lock_guard<mutex> task_lock(m_queue_mutex);
+        /*erase tasks queue*/
         m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
     }
 

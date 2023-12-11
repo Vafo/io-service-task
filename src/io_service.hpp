@@ -50,7 +50,7 @@ public:
     bool post(Callable func, Args ...args) {
         using namespace concurrency;
         _m_check_service_valid_state(__FUNCTION__);
-        
+
         /*notify about new task*/
         unique_lock<mutex> lock(m_queue_mutex);
         
