@@ -165,10 +165,7 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
     io_service serv2;
 
     std::vector<concurrency::jthread> threads1;
-    // threads1.reserve(num_threads);
-
     std::vector<concurrency::jthread> threads2;
-    // threads2.reserve(num_threads);
 
     // Tasks for service 1
     auto add_service1_tasks = 
@@ -191,10 +188,8 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
     // Workers for service 1
     auto add_service1_workers =
         [&] () {
-            std::cout << "WORK" << std::endl;
             for(int i = 0; i < num_threads; ++i)
                 threads1.emplace_back(worker_func, &serv1);
-            std::cout << "ERS" << std::endl;
         };
 
     // Workers for service 2
@@ -263,10 +258,10 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
         SECTION("Reuse service objects"){
             // Shuffled order
             add_service1_workers();
-            // REQUIRE_THROWS(add_service1_tasks());
-            // REQUIRE_THROWS(add_service2_tasks());
+            REQUIRE_THROWS(add_service1_tasks());
+            REQUIRE_THROWS(add_service2_tasks());
 
-            // finish_services();
+            finish_services();
 
             REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/); /*did not change*/
         }
