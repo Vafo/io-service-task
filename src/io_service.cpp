@@ -24,8 +24,9 @@ void io_service::_m_release_from_pool() {
 void io_service::_m_check_service_valid_state(const char* func_name) {
     concurrency::lock_guard<concurrency::mutex> lock(m_queue_mutex);
     if(m_stop_flag == true) {
-        std::string err_msg = func_name;
-        err_msg += "io_service: service was already stopped. It can not be populated";
+        std::string err_msg = "io_service: ";
+        err_msg += func_name;
+        err_msg += " service was already stopped. It can not be populated";
         throw std::runtime_error(err_msg);
     }
 }
