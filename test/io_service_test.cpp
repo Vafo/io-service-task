@@ -257,32 +257,87 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
         finish_services();
 
         REQUIRE(a == num_iterations * tasks_complete);
+    }
+}
 
-        SECTION("Reuse service objects"){
-            // Shuffled order
+TEST_CASE("io_service: restart empty service") {
+    io_service serv;
+
+    REQUIRE_NOTHROW(serv.restart());
+}
+
+TEST_CASE("io_service: service reusage", "[io_service][restart]") {
+    const int num_iterations = 100;
+    const int num_tasks = 50;
+    const int num_threads = 20;
+    
+    int a = 0;
+    std::atomic<int> tasks_complete = 0;
+    concurrency::recursive_mutex a_mutex;
+
+    /*Tasks definition*/
+
+    // counting task
+    auto counting_task = 
+        [&a, &a_mutex, num_iterations, &tasks_complete] () {
+            using namespace concurrency;
+            lock_guard<recursive_mutex> lock(a_mutex);
+            for(int i = 0; i < num_iterations; ++i)
+                a += 1;
+            
+            tasks_complete++;
+        };
+    
+    io_service serv;
+    std::vector<concurrency::jthread> thread_vec;
+
+    auto add_tasks = 
+        [&] () {
+            for(int i = 0; i < num_tasks; ++i)
+                serv.post(counting_task);
+        };
+
+    auto add_workers =
+        [&] () {
+            for(int i = 0; i < num_threads; ++i)
+                thread_vec.emplace_back(worker_func, &serv);
+        };
+
+
+    auto finish_service =
+        [&] () {
+            while(
+                !serv.empty() || !serv.all_idle()
+            )
+                ;
+
+            serv.stop();
+        };
+
+    add_tasks();
+    add_workers();
+    finish_service();
+    
+    REQUIRE(a == num_iterations * tasks_complete);
+
+    SECTION("Reuse non restarted service") {
             int capture_tasks_complete = tasks_complete;
-            add_service1_workers();
-            REQUIRE_THROWS(add_service1_tasks());
-            REQUIRE_THROWS(add_service2_tasks());
+            add_workers();
+            REQUIRE_THROWS(add_tasks());
 
-            finish_services();
+            finish_service();
 
             REQUIRE(a == num_iterations * capture_tasks_complete);
+    }
 
-            // SECTION("Restart service") {
-            //     serv1.restart();
-            //     serv2.restart();
-            //     add_service1_workers();
-            //     REQUIRE_NOTHROW(add_service1_tasks());
-            //     REQUIRE_NOTHROW(add_service2_tasks());
+    SECTION("Reuse restarted service") {
+            serv.restart();
+            REQUIRE_NOTHROW(add_tasks());
+            add_workers();
 
-            //     finish_services();
+            finish_service();
 
-            //     REQUIRE(a == num_iterations * capture_tasks_complete);
-
-            // }
-
-        }
+            REQUIRE(a == num_iterations * tasks_complete);
     }
 }
 
