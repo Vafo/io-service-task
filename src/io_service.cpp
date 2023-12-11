@@ -99,7 +99,7 @@ bool io_service::stop()
     // clear tasks
     _m_clear_tasks();
 
-    // TODO: Wait for all threads to terminate run()
+    // Wait for all threads to terminate run()
     while(m_thread_counters_ptr->threads_total != 0)
         ;
 

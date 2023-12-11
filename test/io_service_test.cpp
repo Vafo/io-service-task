@@ -205,6 +205,8 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
 
     auto finish_services =
         [&] () {
+            // Not really reliable
+            // It wont busy loop good enough to let all tasks to be completed
             while(
                 !serv1.empty() || !serv1.all_idle() ||
                 !serv2.empty() || !serv2.all_idle() 
@@ -214,6 +216,9 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
             serv1.stop();
             serv2.stop();
         };
+
+
+    /*Tasks & Workers execution*/
 
     SECTION("Ordering 1") {
         add_service1_tasks();

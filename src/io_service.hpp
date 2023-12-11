@@ -76,6 +76,9 @@ public:
         return true;
     }
 
+
+    /*functions to check state of service*/
+
     std::size_t task_size() {
         using namespace concurrency;
 
