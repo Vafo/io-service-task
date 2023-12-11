@@ -22,10 +22,22 @@ void io_service::_m_release_from_pool() {
 }
 
 void io_service::_m_check_service_valid_state(const char* func_name) {
+    concurrency::lock_guard<concurrency::mutex> lock(m_queue_mutex);
     if(m_stop_flag == true) {
         std::string err_msg = func_name;
         err_msg += "io_service: service was already stopped. It can not be populated";
         throw std::runtime_error(err_msg);
+    }
+}
+
+void io_service::_m_clear_tasks() {
+    using namespace concurrency;
+
+    std::queue<invocable> empty_queue;
+    { 
+        unique_lock<mutex> lock(m_queue_mutex);
+        // m_queue_cv.notify_all(); /*notify all*/
+        m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
     }
 }
 
@@ -77,23 +89,33 @@ bool io_service::stop()
 { 
     using namespace concurrency;
 
-
-    std::queue<invocable> empty_queue;
     { // notify about stop using m_queue_cv, since workers are waiting on it
         unique_lock<mutex> lock(m_queue_mutex);
-        m_stop_flag = true;
+        m_stop_flag = true; /*set stop flag*/
         m_queue_cv.notify_all(); /*notify all*/
-    // }
-
-    // {
-        // lock_guard<mutex> task_lock(m_queue_mutex);
-        /*erase tasks queue*/
-        m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
     }
+
+    // clear tasks
+    _m_clear_tasks();
 
     // TODO: Wait for all threads to terminate run()
     while(m_thread_counters_ptr->threads_total != 0)
         ;
+
+    return true;
+}
+
+bool io_service::restart() {
+    using namespace concurrency;
+    
+    { // notify about resetted stop using m_queue_cv, since workers are waiting on it
+        unique_lock<mutex> lock(m_queue_mutex);
+        m_stop_flag = false; /*reset stop flag*/
+        m_queue_cv.notify_all(); /*notify all*/
+    }
+    
+    // clear tasks
+    _m_clear_tasks();
 
     return true;
 }

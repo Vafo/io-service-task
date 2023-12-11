@@ -1,6 +1,7 @@
 #include <catch2/catch_all.hpp>
 
 #include <iostream>
+#include <condition_variable>
 
 #include "io_service.hpp"
 
@@ -118,23 +119,26 @@ TEST_CASE("io_service: dispatch", "[io_service]") {
     REQUIRE(a == num_tasks * num_dispatch * num_iterations);
 }
 
-TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]") {
+TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][dispatch]") {
     const int num_iterations = 100;
     const int num_tasks = 50;
     const int num_threads = 20;
     
     int a = 0;
+    std::atomic<int> tasks_complete = 0;
     concurrency::recursive_mutex a_mutex;
 
     /*Tasks definition*/
 
     // counting task
     auto counting_task = 
-        [&a, &a_mutex, num_iterations] () {
+        [&a, &a_mutex, num_iterations, &tasks_complete] () {
             using namespace concurrency;
             lock_guard<recursive_mutex> lock(a_mutex);
             for(int i = 0; i < num_iterations; ++i)
                 a += 1;
+            
+            tasks_complete++;
         };
 
     auto dispatch_task_local =
@@ -202,11 +206,10 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
     auto finish_services =
         [&] () {
             while(
-                !serv1.all_idle() || !serv1.empty() ||
-                !serv2.all_idle() || !serv2.empty()
+                !serv1.empty() || !serv1.all_idle() ||
+                !serv2.empty() || !serv2.all_idle() 
             )
                 ;
-                // std::cout << serv1.task_size() << " " << serv2.task_size() << std::endl; /*wait for threads to finish tasks*/
 
             serv1.stop();
             serv2.stop();
@@ -220,7 +223,7 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
 
         finish_services();
 
-        REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/); // 
+        REQUIRE(a == num_iterations * tasks_complete);
     }
 
     SECTION("Ordering 2") {
@@ -231,7 +234,7 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
 
         finish_services();
 
-        REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/);
+        REQUIRE(a == num_iterations * tasks_complete);
     }
 
     SECTION("Ordering 3") {
@@ -242,7 +245,7 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
 
         finish_services();
 
-        REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/);
+        REQUIRE(a == num_iterations * tasks_complete);
     }
 
     SECTION("Ordering 4") {
@@ -253,17 +256,32 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service]")
 
         finish_services();
 
-        REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/);
+        REQUIRE(a == num_iterations * tasks_complete);
 
         SECTION("Reuse service objects"){
             // Shuffled order
+            int capture_tasks_complete = tasks_complete;
             add_service1_workers();
             REQUIRE_THROWS(add_service1_tasks());
             REQUIRE_THROWS(add_service2_tasks());
 
             finish_services();
 
-            REQUIRE(a == num_tasks * num_iterations * 2/*num of services*/); /*did not change*/
+            REQUIRE(a == num_iterations * capture_tasks_complete);
+
+            // SECTION("Restart service") {
+            //     serv1.restart();
+            //     serv2.restart();
+            //     add_service1_workers();
+            //     REQUIRE_NOTHROW(add_service1_tasks());
+            //     REQUIRE_NOTHROW(add_service2_tasks());
+
+            //     finish_services();
+
+            //     REQUIRE(a == num_iterations * capture_tasks_complete);
+
+            // }
+
         }
     }
 }
