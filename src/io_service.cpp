@@ -43,6 +43,7 @@ void io_service::_m_clear_tasks() {
 }
 
 void io_service::_m_process_tasks() {
+    pool_inserter inserter(*this);
     while(true) {
         invocable cur_task;
 
@@ -81,9 +82,9 @@ void io_service::_m_process_tasks() {
 }
 
 void io_service::run() {
-    _m_insert_into_pool(); /*add self to m_thread_pool*/
+    // _m_insert_into_pool(); /*add self to m_thread_pool*/
     _m_process_tasks();
-    _m_release_from_pool();
+    // _m_release_from_pool();
 }
 
 bool io_service::stop()

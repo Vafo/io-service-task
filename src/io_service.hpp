@@ -93,6 +93,19 @@ public:
     { return m_thread_counters_ptr->threads_total == m_thread_counters_ptr->threads_idle; }
 
 private:
+    // friend struct pool_inserter;
+    struct pool_inserter {
+
+        pool_inserter(io_service& serv): m_serv(serv)
+        { m_serv._m_insert_into_pool(); }
+
+        ~pool_inserter()
+        { m_serv._m_release_from_pool(); }
+        
+    private:
+        io_service& m_serv;
+    }; // struct pool_inserter
+
     struct invocable {
         invocable(): m_lambda() {}
 

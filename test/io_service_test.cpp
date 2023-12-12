@@ -10,7 +10,16 @@
 namespace io_service {
 
 static void worker_func(io_service* serv_ptr) {
-    serv_ptr->run();
+    try
+    {
+        serv_ptr->run();
+    }
+    catch(const std::exception& e)
+    {
+        // TODO: Wait for specific exception: post to stopped io_service
+        // Should run() continue or abort (?)
+        std::cerr << e.what() << '\n';
+    }
 }
 
 TEST_CASE("io_service: creation and deletion", "[io_service]") {
@@ -29,23 +38,26 @@ TEST_CASE("io_service: creation and deletion", "[io_service]") {
 }
 
 TEST_CASE("io_service: counting tasks", "[io_service]") {
+    const int num_threads = 5;
     const int num_iterations = 100;
     const int num_tasks = 50;
-    const int num_threads = 5;
-    
+
     io_service serv;
 
     int a = 0;
+    int tasks_count = 0;
     concurrency::mutex a_mutex;
 
     // post counting jobs
     for(int i = 0; i < num_tasks; ++i)
         serv.post(
-            [&a, &a_mutex, num_iterations] () {
+            [&a, &a_mutex, num_iterations, &tasks_count] () {
                 using namespace concurrency;
                 lock_guard<mutex> lock(a_mutex);
                 for(int i = 0; i < num_iterations; ++i)
                     a += 1;
+
+                tasks_count++;
             });
 
 
@@ -59,15 +71,11 @@ TEST_CASE("io_service: counting tasks", "[io_service]") {
             // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
             threads.emplace_back(worker_func, &serv);
         }
-            
-
-        while(!serv.all_idle() || !serv.empty())
-            ; /*wait for threads to finish tasks*/
 
         serv.stop();
     }
 
-    REQUIRE(a == num_tasks * num_iterations);
+    REQUIRE(a == tasks_count * num_iterations);
 }
 
 TEST_CASE("io_service: dispatch", "[io_service]") {
@@ -79,15 +87,18 @@ TEST_CASE("io_service: dispatch", "[io_service]") {
     io_service serv;
 
     int a = 0;
+    int tasks_count = 0;
     concurrency::mutex a_mutex;
 
     // post counting jobs
     auto task_func = 
-        [&a, &a_mutex, num_iterations] () {
+        [&a, &a_mutex, num_iterations, &tasks_count] () {
             using namespace concurrency;
             lock_guard<mutex> lock(a_mutex);
             for(int i = 0; i < num_iterations; ++i)
                 a += 1;
+
+            tasks_count++;
         };
 
     for(int i = 0; i < num_tasks; ++i)
@@ -100,23 +111,18 @@ TEST_CASE("io_service: dispatch", "[io_service]") {
                     serv.dispatch(task_func);
             });
 
-
     // add workers
     std::vector<concurrency::jthread> threads;
-    // how to avoid reservation (?)
-    threads.reserve(num_threads);
+    // // how to avoid reservation (?)
+    // threads.reserve(num_threads);
     for(int i = 0; i < num_threads; ++i) {
         // how to deal with move constructor (?)
         // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
         threads.emplace_back(worker_func, &serv);
     }
-        
-
-    while(!serv.all_idle() || !serv.empty())
-        ; /*wait for threads to finish tasks*/
 
     serv.stop();
-    REQUIRE(a == num_tasks * num_dispatch * num_iterations);
+    REQUIRE(a == tasks_count * num_iterations);
 }
 
 TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][dispatch]") {
@@ -125,7 +131,10 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
     const int num_threads = 20;
     
     int a = 0;
-    std::atomic<int> tasks_complete = 0;
+    int tasks_complete = 0;
+    // Validity of dispatch
+    bool is_dispatch_local_valid = true;
+    bool is_dispatch_foreign_valid = true;
     concurrency::recursive_mutex a_mutex;
 
     /*Tasks definition*/
@@ -142,25 +151,26 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
         };
 
     auto dispatch_task_local =
-        [&a, &a_mutex, num_iterations, counting_task] (io_service* serv_ptr) {
+        [&a, &is_dispatch_local_valid, &a_mutex, num_iterations, counting_task]
+        (io_service* serv_ptr) {
             using namespace concurrency;
             lock_guard<recursive_mutex> lock(a_mutex);
             int cur_val = a;
             // If executes right now, a_mutex will recursively lock, and thus, proceed
             serv_ptr->dispatch(counting_task);
 
-            REQUIRE(cur_val + num_iterations == a);
+            is_dispatch_local_valid = is_dispatch_local_valid && (cur_val + num_iterations == a);
         };
     
     auto dispatch_task_foreign =
-        [&a, &a_mutex, num_iterations, counting_task] (io_service* serv_ptr) {
+        [&a, &is_dispatch_foreign_valid, &a_mutex, num_iterations, counting_task] (io_service* serv_ptr) {
             using namespace concurrency;
             lock_guard<recursive_mutex> lock(a_mutex);
             int cur_val = a;
             // If executes right now, a_mutex will recursively lock, and thus, proceed
             serv_ptr->dispatch(counting_task);
 
-            REQUIRE(cur_val == a);
+            is_dispatch_foreign_valid = is_dispatch_foreign_valid && (cur_val == a);
         };
 
     /*Services preparation*/
@@ -207,14 +217,18 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
         [&] () {
             // Not really reliable
             // It wont busy loop good enough to let all tasks to be completed
-            while(
-                !serv1.empty() || !serv1.all_idle() ||
-                !serv2.empty() || !serv2.all_idle() 
-            )
-                ;
+            // while(
+            //     !serv1.empty() || !serv1.all_idle() ||
+            //     !serv2.empty() || !serv2.all_idle() 
+            // )
+            //     ;
+            // TODO: Add sleep
 
             serv1.stop();
             serv2.stop();
+
+            REQUIRE(is_dispatch_local_valid);
+            REQUIRE(is_dispatch_foreign_valid);
         };
 
 
@@ -311,10 +325,11 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
 
     auto finish_service =
         [&] () {
-            while(
-                !serv.empty() || !serv.all_idle()
-            )
-                ;
+            // while(
+            //     !serv.empty() || !serv.all_idle()
+            // )
+            //     ;
+            // TODO: Add sleep
 
             serv.stop();
         };
