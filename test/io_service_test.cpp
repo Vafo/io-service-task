@@ -1,7 +1,8 @@
 #include <catch2/catch_all.hpp>
 
 #include <iostream>
-#include <condition_variable>
+#include <thread>
+#include <chrono>
 
 #include "io_service.hpp"
 
@@ -64,13 +65,9 @@ TEST_CASE("io_service: counting tasks", "[io_service]") {
     // add workers
     {
         std::vector<concurrency::jthread> threads;
-        // how to avoid reservation (?)
-        threads.reserve(num_threads);
-        for(int i = 0; i < num_threads; ++i) {
-            // how to deal with move constructor (?)
-            // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
+
+        for(int i = 0; i < num_threads; ++i)
             threads.emplace_back(worker_func, &serv);
-        }
 
         serv.stop();
     }
@@ -113,13 +110,9 @@ TEST_CASE("io_service: dispatch", "[io_service]") {
 
     // add workers
     std::vector<concurrency::jthread> threads;
-    // // how to avoid reservation (?)
-    // threads.reserve(num_threads);
-    for(int i = 0; i < num_threads; ++i) {
-        // how to deal with move constructor (?)
-        // threads.push_back( std::move(concurrency::jthread(worker_func, &serv)) );
+    
+    for(int i = 0; i < num_threads; ++i)
         threads.emplace_back(worker_func, &serv);
-    }
 
     serv.stop();
     REQUIRE(a == tasks_count * num_iterations);
@@ -129,6 +122,9 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
     const int num_iterations = 100;
     const int num_tasks = 50;
     const int num_threads = 20;
+
+    using namespace std::chrono_literals;
+    const std::chrono::milliseconds sleep_ms = 10ms;
     
     int a = 0;
     int tasks_complete = 0;
@@ -215,14 +211,7 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
 
     auto finish_services =
         [&] () {
-            // Not really reliable
-            // It wont busy loop good enough to let all tasks to be completed
-            // while(
-            //     !serv1.empty() || !serv1.all_idle() ||
-            //     !serv2.empty() || !serv2.all_idle() 
-            // )
-            //     ;
-            // TODO: Add sleep
+            std::this_thread::sleep_for(sleep_ms);
 
             serv1.stop();
             serv2.stop();
@@ -290,6 +279,9 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
     const int num_tasks = 50;
     const int num_threads = 20;
     
+    using namespace std::chrono_literals;
+    const std::chrono::milliseconds sleep_ms = 10ms;
+
     int a = 0;
     std::atomic<int> tasks_complete = 0;
     concurrency::recursive_mutex a_mutex;
@@ -325,11 +317,7 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
 
     auto finish_service =
         [&] () {
-            // while(
-            //     !serv.empty() || !serv.all_idle()
-            // )
-            //     ;
-            // TODO: Add sleep
+            std::this_thread::sleep_for(sleep_ms);
 
             serv.stop();
         };
