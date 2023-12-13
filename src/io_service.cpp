@@ -43,7 +43,6 @@ void io_service::_m_clear_tasks() {
 }
 
 void io_service::_m_process_tasks() {
-    pool_inserter inserter(*this);
     while(true) {
         invocable cur_task;
 
@@ -52,13 +51,7 @@ void io_service::_m_process_tasks() {
             using namespace concurrency;
 
             unique_lock<mutex> lock(m_queue_mutex);
-
-            // Check if stop was requested, right before entering condition variable, which could be missed
-            // Some threads might starve so much, that they will execute run() only after service was stopped
-            // if(m_stop_flag == true)
-            //     return;
             
-            m_thread_counters_ptr->threads_idle++; /*thread is idle when it waits for task*/
             m_queue_cv.wait(
                 lock,
                 [&] () {
@@ -66,7 +59,6 @@ void io_service::_m_process_tasks() {
                     return (m_queue.size() > 0) || (m_stop_flag == true); 
                 }
             );
-            m_thread_counters_ptr->threads_idle--; /*thread is not idle when it gets task*/
             
             // Check if stop was requested
             if(m_stop_flag == true)
@@ -82,9 +74,8 @@ void io_service::_m_process_tasks() {
 }
 
 void io_service::run() {
-    // _m_insert_into_pool(); /*add self to m_thread_pool*/
+    pool_inserter inserter(*this);
     _m_process_tasks();
-    // _m_release_from_pool();
 }
 
 bool io_service::stop()

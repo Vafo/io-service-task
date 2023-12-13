@@ -3,7 +3,8 @@
 #include "io_service.hpp"
 #include "thread"
 
-#include <chrono>
+#include <thread> // this_thread::sleep_for
+#include <chrono> // chrono_literals
 
 void worker_func(io_service::io_service* service_ptr) {
     service_ptr->run();
@@ -94,11 +95,9 @@ int main(int argc, char* argv[]) {
 
     auto finish_services =
         [&] () {
-            while(
-                !serv1.empty() || !serv1.all_idle() ||
-                !serv2.empty() || !serv2.all_idle() 
-            )
-                ;
+            using namespace std::chrono_literals;
+
+            std::this_thread::sleep_for(10ms);
 
             serv1.stop();
             serv2.stop();

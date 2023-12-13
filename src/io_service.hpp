@@ -22,12 +22,10 @@ class io_service {
 public:
     struct thread_counters {
         thread_counters():
-            threads_total(0),
-            threads_idle(0)
+            threads_total(0)
         {}
 
         alignas(int) std::atomic<int> threads_total;
-        alignas(int) std::atomic<int> threads_idle;
     }; // struct thread_counters
 
     typedef util::shared_ptr<thread_counters> thread_counters_ptr_type;
@@ -76,24 +74,8 @@ public:
         return true;
     }
 
-
-    /*functions to check state of service*/
-
-    std::size_t task_size() {
-        using namespace concurrency;
-
-        lock_guard<mutex> lock(m_queue_mutex);
-        return m_queue.size();
-    }
-
-    bool empty()
-    { return task_size() == 0; }
-
-    bool all_idle()
-    { return m_thread_counters_ptr->threads_total == m_thread_counters_ptr->threads_idle; }
-
 private:
-    // friend struct pool_inserter;
+
     struct pool_inserter {
 
         pool_inserter(io_service& serv): m_serv(serv)

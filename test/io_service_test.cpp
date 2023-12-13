@@ -19,7 +19,7 @@ static void worker_func(io_service* serv_ptr) {
     {
         // TODO: Wait for specific exception: post to stopped io_service
         // Should run() continue or abort (?)
-        std::cerr << e.what() << '\n';
+        // std::cerr << e.what() << '\n';
     }
 }
 
@@ -215,6 +215,8 @@ TEST_CASE("io_service: dispatch into own and foreign task pool", "[io_service][d
 
             serv1.stop();
             serv2.stop();
+            threads1.clear();
+            threads2.clear();
 
             REQUIRE(is_dispatch_local_valid);
             REQUIRE(is_dispatch_foreign_valid);
@@ -320,6 +322,7 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
             std::this_thread::sleep_for(sleep_ms);
 
             serv.stop();
+            thread_vec.clear();
         };
 
     add_tasks();
