@@ -22,7 +22,7 @@ public:
     service_stopped_error(std::string in_str): std::logic_error(in_str)
     {}
 
-    virtual ~service_stopped_error() {}
+    virtual ~service_stopped_error() throw() /*according to std exceptions*/{}
 }; // class service_stopped_error
 
 
