@@ -15,11 +15,13 @@ static void worker_func(io_service* serv_ptr) {
     {
         serv_ptr->run();
     }
-    catch(const std::exception& e)
+    catch(const service_stopped_error& e)
     {
-        // TODO: Wait for specific exception: post to stopped io_service
         // Should run() continue or abort (?)
         // std::cerr << e.what() << '\n';
+    }
+    catch(...) {
+        REQUIRE(false); /*worker thread has unhandled exception*/
     }
 }
 

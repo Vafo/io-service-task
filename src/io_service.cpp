@@ -27,7 +27,7 @@ void io_service::_m_check_service_valid_state(const char* func_name) {
         std::string err_msg = "io_service: ";
         err_msg += func_name;
         err_msg += " service was already stopped. It can not be populated";
-        throw std::runtime_error(err_msg);
+        throw service_stopped_error(err_msg);
     }
 }
 

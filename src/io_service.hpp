@@ -1,11 +1,11 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
-#include <set>
 #include <queue>
-#include <stop_token>
 #include <mutex> /*std::lock*/
 #include <atomic>
+
+#include <exception>
 
 #include "thread.hpp"
 #include "mutex.hpp"
@@ -16,6 +16,15 @@
 
 
 namespace io_service {
+
+class service_stopped_error: public std::logic_error {
+public:
+    service_stopped_error(std::string in_str): std::logic_error(in_str)
+    {}
+
+    virtual ~service_stopped_error() {}
+}; // class service_stopped_error
+
 
 class io_service {
 
