@@ -2,6 +2,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Order is important
 add_subdirectory(concurrency EXCLUDE_FROM_ALL)
+add_subdirectory(shared_ptr EXCLUDE_FROM_ALL)
 
 # include(ExternalProject)
 
@@ -12,6 +13,6 @@ add_subdirectory(concurrency EXCLUDE_FROM_ALL)
 # )
 
 add_library(module_concurrency ALIAS concurrency_impl)
-add_library(module_function ALIAS function_impl)
+add_library(module_shared_ptr ALIAS shared_ptr_impl)
 
 

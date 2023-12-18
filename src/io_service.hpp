@@ -37,7 +37,7 @@ public:
         alignas(int) std::atomic<int> threads_total;
     }; // struct thread_counters
 
-    typedef util::shared_ptr<thread_counters> thread_counters_ptr_type;
+    typedef memory::shared_ptr<thread_counters> thread_counters_ptr_type;
 
 
     io_service(): 
