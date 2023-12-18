@@ -18,6 +18,15 @@ bool io_service::_m_is_in_pool() {
 
 void io_service::_m_release_from_pool() {
     local_thread_counters_ptr->threads_total--;
+
+    // maybe change to atomic compare_exchange
+    if(local_thread_counters_ptr->threads_total == 0) {
+        // release io_service from stop()
+        using namespace concurrency;
+        unique_lock<mutex> lock(m_stop_signal_mutex);
+        m_stop_signal_cv.notify_one();
+    }
+
     local_thread_counters_ptr = thread_counters_ptr_type(); /*swap with empty*/
 }
 
@@ -92,8 +101,15 @@ bool io_service::stop()
     _m_clear_tasks();
 
     // Wait for all threads to terminate run()
-    while(m_thread_counters_ptr->threads_total != 0)
-        ;
+    {
+        unique_lock<mutex> lock(m_stop_signal_mutex);
+        m_stop_signal_cv.wait(
+            lock,
+            [&] () {
+                return m_thread_counters_ptr->threads_total == 0;        
+            }
+        );
+    }
 
     return true;
 }

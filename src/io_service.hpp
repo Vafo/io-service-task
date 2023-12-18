@@ -126,6 +126,10 @@ private:
     concurrency::mutex m_queue_mutex;
     bool m_stop_flag; // tied to m_queue mutex and cond var
 
+    // Used to hold io_service waiting for workers to finish
+    concurrency::mutex m_stop_signal_mutex;
+    concurrency::condition_variable m_stop_signal_cv;
+
     thread_counters_ptr_type m_thread_counters_ptr;
 
 }; // class io_service
