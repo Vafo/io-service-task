@@ -1,6 +1,3 @@
 [submodule "modules/concurrency"]
 	path = modules/concurrency
 	url = git@github.com:Vafo/multithread-task.git
-[submodule "modules/function"]
-	path = modules/function
-	url = https://github.com/Vafo/function.git
