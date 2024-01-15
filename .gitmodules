@@ -3,4 +3,4 @@
 	url = git@github.com:Vafo/multithread-task.git
 [submodule "modules/shared_ptr"]
 	path = modules/shared_ptr
-	url = https://github.com/Vafo/shared-ptr-task.git
+	url = git@github.com:Vafo/shared-ptr-task.git
