@@ -9,10 +9,11 @@
 
 #include "thread.hpp"
 #include "mutex.hpp"
+#include "lock_guard.hpp"
 #include "condition_variable.hpp"
 
 #include "function.hpp"
-#include "shared_ptr.h"
+#include "shared_ptr.hpp"
 
 
 namespace io_service {

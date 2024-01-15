@@ -7,6 +7,7 @@
 #include "io_service.hpp"
 
 #include "thread.hpp"
+#include "jthread.hpp"
 
 namespace io_service {
 
