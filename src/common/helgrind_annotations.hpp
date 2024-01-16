@@ -1,6 +1,11 @@
 #ifndef ASIO_HELGRIND_ANNOTATIONS_HPP
 #define ASIO_HELGRIND_ANNOTATIONS_HPP
 
+/* 
+ * Taken from
+ * https://gitlab.desy.de/dcache/cta/-/blob/main/common/helgrind_annotator.hpp?ref_type=heads
+*/
+
 #include <valgrind/helgrind.h>
 #undef _GLIBCXX_SYNCHRONIZATION_HAPPENS_BEFORE
 #define _GLIBCXX_SYNCHRONIZATION_HAPPENS_BEFORE(A) ANNOTATE_HAPPENS_BEFORE(A)
