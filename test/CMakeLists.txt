@@ -6,7 +6,8 @@ set(INCLUDE_MODULES_TESTS OFF)
 # List test cpp's
 add_library(io_service_test_suite OBJECT
 	io_service_test.cpp
-	invocable_test.cpp)
+	invocable_test.cpp
+	threadsafe_queue_test.cpp)
 
 target_link_libraries(io_service_test_suite Catch2::Catch2)
 target_link_libraries(io_service_test_suite io_service_impl io_service_compiler_flags)
