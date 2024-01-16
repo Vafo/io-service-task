@@ -1,13 +1,12 @@
+#include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
 #include <future>
-#include <iostream>
 #include <thread>
 #include <chrono>
 
 #include "io_service.hpp"
 
-#include "thread.hpp"
 #include "jthread.hpp"
 
 #include "invocable.hpp"
@@ -390,18 +389,21 @@ TEST_CASE("make_invocable") {
 		invocable inv(std::move(task), var1, var2);
 		
 		std::jthread tr(std::move(inv));
+		ANNOTATE_HAPPENS_BEFORE(&fut);
 		fut.wait();
 		REQUIRE(fut.get() == (var1 - var2));
 	}
+
 	SECTION("move assignment") {
+		std::packaged_task<int(int,int)> task(func);
+		std::future<int> fut = task.get_future();
+		invocable inv;
+		inv = invocable(std::move(task), var1, var2);
+
+		std::jthread tr(std::move(inv));
+		fut.wait();
+		REQUIRE(fut.get() == (var1 - var2));
 	}
-	std::packaged_task<int(int,int)> task(func);
-	std::future<int> fut = task.get_future();
-	invocable inv(std::move(task), var1, var2);
-	
-	std::jthread tr(std::move(inv));
-	fut.wait();
-	REQUIRE(fut.get() == (var1 - var2));
 }
 
 } // namespace new_impl
