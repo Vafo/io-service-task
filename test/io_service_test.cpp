@@ -377,6 +377,20 @@ TEST_CASE("invocable cstr & call") {
 	REQUIRE((var1 + var2) == fut.get());
 }
 
+TEST_CASE("make_invocable") {
+	const int var1 = 4124;
+	const int var2 = 2412;
+	auto func = [] (int a, int b) {
+		return a - b;
+	};
+
+	std::future<int> fut;
+	invocable inv = make_invocable(
+		fut, func,
+		var1, var2);
+
+}
+
 } // namespace new_impl
 
 } // namespace io_service

@@ -182,7 +182,7 @@ public:
 	std::future<std::result_of_t<Callable()>>
     post(Callable func, Args ...args) {
         // _m_check_service_valid_state(__FUNCTION__);
-		typedef std::result_of_t<Callable()> return_type;
+		typedef std::result_of_t<Callable> return_type;
 		std::packaged_task<return_type()> new_task(
 			pack_task_and_args(func, args...));
 
@@ -218,19 +218,7 @@ public:
 
 // Impl funcs
 private:
-	template<typename Callable, typename ...Args>
- 	std::packaged_task<std::result_of_t<Callable()>()>
-	pack_task_and_args(Callable calb, Args... args) {
-		typedef std::result_of_t<Callable()> return_type;
-		std::packaged_task<return_type()> new_task(
-			// store args in lambda
-			[calb, args...]() -> return_type {
-				return calb(args...);
-			});
-
-		return new_task;
-	}
-
+	
 }; // class io_service
 
 
