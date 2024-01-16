@@ -129,4 +129,9 @@ bool io_service::restart() {
     return true;
 }
 
+
+namespace new_impl {
+
+} // namespace new_impl
+
 } // namespace io_service

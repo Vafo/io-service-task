@@ -135,6 +135,65 @@ private:
 
 }; // class io_service
 
+namespace new_impl {
+
+class io_service {
+
+public:
+    io_service()
+    {}
+
+    ~io_service() {
+        stop();
+    }
+
+    void run();
+
+    bool stop();
+
+    bool restart();
+
+    template<typename Callable, typename ...Args>
+    bool post(Callable func, Args ...args) {
+        // _m_check_service_valid_state(__FUNCTION__);
+
+        /*notify about new task*/
+        // lock_guard<mutex> lock(m_queue_mutex);
+
+        return true;
+    }
+
+    template<typename Callable, typename ...Args>
+    bool dispatch(Callable func, Args ...args) {
+
+        if( 1 /*is in pool*/ ) {
+            /*if this_thread is among m_thread_pool, execute input task immediately*/
+            func(args...);
+        } else {
+            post(func, args...);
+        }
+
+        return true;
+    }
+
+private:
+   
+	struct invocable {};
+    std::queue<invocable> m_queue;
+    concurrency::condition_variable m_queue_cv;
+    concurrency::mutex m_queue_mutex;
+    bool m_stop_flag; // tied to m_queue mutex and cond var
+
+    // Used to hold io_service waiting for workers to finish
+    concurrency::mutex m_stop_signal_mutex;
+    concurrency::condition_variable m_stop_signal_cv;
+
+}; // class io_service
+
+
+} // namespace new_impl
+
+
 } // namespace io_service
 
 #endif
