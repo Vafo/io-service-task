@@ -85,7 +85,7 @@ public:
 		if(m_inv_ptr)
 			m_inv_ptr->call();
 
-		(void)m_inv_ptr.release();
+		m_inv_ptr.reset();
 	}
 
 public:
