@@ -183,13 +183,11 @@ public:
     post(Callable func, Args ...args) {
         // _m_check_service_valid_state(__FUNCTION__);
 		typedef std::result_of_t<Callable> return_type;
-		std::packaged_task<return_type()> new_task(
-			pack_task_and_args(func, args...));
-
+		std::packaged_task<Callable> new_task(func);
 		// obtain future of task
 		std::future<return_type> fut(new_task.get_future());
 
-		invocable inv_task(new_task);
+		invocable inv_task(new_task, args...);
 	
 		{
 			using namespace concurrency;

@@ -1,29 +1,14 @@
 #ifndef ASIO_INVOCABLE_HPP
 #define ASIO_INVOCABLE_HPP
 
+#include <iostream>
 #include <future>
 #include <memory>
+#include <stdexcept>
+#include <tuple>
 #include <type_traits>
 
 namespace io_service::new_impl {
-
-namespace detail {
-
-template<typename Callable, typename ...Args>
-std::packaged_task<std::result_of_t<Callable()>()>
-pack_task_and_args(Callable calb, Args... args) {
-	typedef std::result_of_t<Callable()> return_type;
-	std::packaged_task<return_type()> new_task(
-		// store args in lambda
-		[calb, args...]() -> return_type {
-			return calb(args...);
-		});
-
-	return new_task;
-}
-
-}; // namespace detail
-
 struct invocable_int {
 	virtual ~invocable_int() {}
 
@@ -31,7 +16,7 @@ struct invocable_int {
 }; // struct invocable_int
 
 
-template<typename Callable>
+template<typename Callable, typename TupleT>
 struct invocable_impl: public invocable_int {
 public:
 	// typedef std::result_of_t<Callable> return_type;
@@ -39,19 +24,22 @@ public:
 
 private:
 	task_type m_task;
+	TupleT m_args;
 
 private:
 	invocable_impl(const invocable_impl& other) = delete;
 	invocable_impl& operator=(const invocable_impl& other) = delete;
 
 public:
-	invocable_impl(task_type&& task)
+	invocable_impl(task_type&& task, TupleT&& args)
 		: m_task(std::move(task))
+		, m_args(args)
 	{}
 	
 	void call() {
-		m_task();
+		std::apply(m_task, m_args);
 	}
+
 }; // struct invocable_impl
 
 
@@ -81,17 +69,23 @@ public:
 public:
 	// TODO: Simplify interface.
 	// Let user pass packaged task and args
-	template<typename Callable>
-	invocable(std::packaged_task<Callable>&& task)
+	template<typename Callable, typename ...Args>
+	invocable(
+		std::packaged_task<Callable>&& task,
+		Args... args
+	)
 		: m_inv_ptr( 
-			std::make_unique<invocable_impl<Callable>>(
-				std::move(task)))
+			std::make_unique<
+				invocable_impl<Callable, std::tuple<Args...>>>(
+					std::move(task), std::make_tuple(args...)))
 	{}
 
 public:
 	void operator()() {
 		if(m_inv_ptr)
 			m_inv_ptr->call();
+
+		(void)m_inv_ptr.release();
 	}
 
 public:
@@ -105,30 +99,6 @@ public:
 
 }; // struct invocable
 
-
-template<typename Callable, typename ...Args>
-invocable make_invocable(Callable calb, Args... args) {
-	typedef std::result_of_t<Callable> return_type;
-	std::packaged_task<return_type()> new_task(
-		detail::pack_task_and_args(calb, args...));
-
-	return invocable(std::move(new_task));
-}
-
-template<typename Callable, typename ...Args>
-invocable make_invocable(
-	std::future<std::result_of_t<Callable>>& fut,
-	Callable calb,
-	Args... args
-) {
-	typedef std::result_of_t<Callable> return_type;
-	std::packaged_task<return_type()> new_task(
-		detail::pack_task_and_args(calb, args...));
-
-	// obtain future of task
-	fut = new_task.get_future();
-	return invocable(std::move(new_task));
-}
 
 } // namespace io_service::new_impl
 

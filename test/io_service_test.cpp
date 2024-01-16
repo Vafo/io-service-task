@@ -380,15 +380,17 @@ TEST_CASE("invocable cstr & call") {
 TEST_CASE("make_invocable") {
 	const int var1 = 4124;
 	const int var2 = 2412;
-	auto func = [] (int a, int b) {
+	auto func = [] (int a, int b) -> int {
 		return a - b;
 	};
 
-	std::future<int> fut;
-	invocable inv = make_invocable(
-		fut, func,
-		var1, var2);
-
+	std::packaged_task<int(int,int)> task(func);
+	std::future<int> fut = task.get_future();
+	invocable inv(std::move(task), var1, var2);
+	
+	std::jthread tr(std::move(inv));
+	fut.wait();
+	REQUIRE(fut.get() == (var1 - var2));
 }
 
 } // namespace new_impl
