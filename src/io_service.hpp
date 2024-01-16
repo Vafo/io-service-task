@@ -1,11 +1,13 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
+#include <future>
 #include <queue>
 #include <mutex> /*std::lock*/
 #include <atomic>
 
 #include <exception>
+#include <type_traits>
 
 #include "thread.hpp"
 #include "mutex.hpp"
@@ -14,6 +16,9 @@
 
 #include "function.hpp"
 #include "shared_ptr.hpp"
+
+#include <future>
+#include "invocable.hpp"
 
 
 namespace io_service {
@@ -135,9 +140,27 @@ private:
 
 }; // class io_service
 
+
 namespace new_impl {
 
 class io_service {
+private:
+/*
+	threadsafe_queue<invocable> global_queue;
+	vector<local_queue_ptr> local_queues;
+	std::atomic<int> counter; // of threads
+	interrupt_flags global_int_flags;
+*/
+
+private: 
+    std::queue<invocable> m_queue;
+    concurrency::condition_variable m_queue_cv;
+    concurrency::mutex m_queue_mutex;
+    bool m_stop_flag; // tied to m_queue mutex and cond var
+
+    // Used to hold io_service waiting for workers to finish
+    concurrency::mutex m_stop_signal_mutex;
+    concurrency::condition_variable m_stop_signal_cv;
 
 public:
     io_service()
@@ -147,20 +170,37 @@ public:
         stop();
     }
 
+public:
     void run();
 
     bool stop();
 
     bool restart();
 
+public:
     template<typename Callable, typename ...Args>
-    bool post(Callable func, Args ...args) {
+	std::future<std::result_of_t<Callable()>>
+    post(Callable func, Args ...args) {
         // _m_check_service_valid_state(__FUNCTION__);
+		typedef std::result_of_t<Callable()> return_type;
+		std::packaged_task<return_type()> new_task(
+			pack_task_and_args(func, args...));
 
+		// obtain future of task
+		std::future<return_type> fut(new_task.get_future());
+
+		invocable inv_task(new_task);
+	
+		{
+			using namespace concurrency;
+			lock_guard<mutex> lk(m_queue_mutex);
+			m_queue.push(inv_task);
+			m_queue_cv.notify_one();
+		}
         /*notify about new task*/
         // lock_guard<mutex> lock(m_queue_mutex);
 
-        return true;
+        return fut;
     }
 
     template<typename Callable, typename ...Args>
@@ -176,17 +216,20 @@ public:
         return true;
     }
 
+// Impl funcs
 private:
-   
-	struct invocable {};
-    std::queue<invocable> m_queue;
-    concurrency::condition_variable m_queue_cv;
-    concurrency::mutex m_queue_mutex;
-    bool m_stop_flag; // tied to m_queue mutex and cond var
+	template<typename Callable, typename ...Args>
+ 	std::packaged_task<std::result_of_t<Callable()>()>
+	pack_task_and_args(Callable calb, Args... args) {
+		typedef std::result_of_t<Callable()> return_type;
+		std::packaged_task<return_type()> new_task(
+			// store args in lambda
+			[calb, args...]() -> return_type {
+				return calb(args...);
+			});
 
-    // Used to hold io_service waiting for workers to finish
-    concurrency::mutex m_stop_signal_mutex;
-    concurrency::condition_variable m_stop_signal_cv;
+		return new_task;
+	}
 
 }; // class io_service
 

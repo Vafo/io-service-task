@@ -1,5 +1,6 @@
 #include <catch2/catch_all.hpp>
 
+#include <future>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -8,6 +9,8 @@
 
 #include "thread.hpp"
 #include "jthread.hpp"
+
+#include "invocable.hpp"
 
 namespace io_service {
 
@@ -354,5 +357,26 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
             REQUIRE(a == num_iterations * tasks_complete);
     }
 }
+
+namespace new_impl {
+
+TEST_CASE("invocable cstr & call") {
+	const int var1 = 123;
+	const int var2 = 5123;
+
+	std::packaged_task<int()> task(
+		[var1, var2] () -> int {
+			return var1 + var2;
+		});
+
+	std::future<int> fut = task.get_future();
+	invocable inv(std::move(task));
+
+	inv();
+	fut.wait();
+	REQUIRE((var1 + var2) == fut.get());
+}
+
+} // namespace new_impl
 
 } // namespace io_service
