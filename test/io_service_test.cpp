@@ -1,7 +1,6 @@
 #include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
-#include <future>
 #include <thread>
 #include <chrono>
 
@@ -9,7 +8,6 @@
 
 #include "jthread.hpp"
 
-#include "invocable.hpp"
 
 namespace io_service {
 
