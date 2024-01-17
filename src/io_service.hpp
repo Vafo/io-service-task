@@ -1,15 +1,13 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
-#include <future>
+#include "helgrind_annotations.hpp"
 #include <queue>
-#include <mutex> /*std::lock*/
 #include <atomic>
 
-#include <exception>
+#include <stdexcept>
 #include <type_traits>
 
-#include "thread.hpp"
 #include "mutex.hpp"
 #include "lock_guard.hpp"
 #include "condition_variable.hpp"
@@ -19,7 +17,7 @@
 
 #include <future>
 #include "invocable.hpp"
-
+#include "threadsafe_queue.hpp"
 
 namespace io_service {
 
@@ -145,22 +143,27 @@ namespace new_impl {
 
 class io_service {
 private:
+	typedef invocable task_type;
+
+private:
+	threadsafe_queue<task_type> m_global_queue;
+
 /*
-	threadsafe_queue<invocable> global_queue;
-	vector<local_queue_ptr> local_queues;
-	std::atomic<int> counter; // of threads
+	vector<local_work_steal_queue_ptr> local_queues;
 	interrupt_flags global_int_flags;
 */
 
 private: 
-    std::queue<invocable> m_queue;
-    concurrency::condition_variable m_queue_cv;
-    concurrency::mutex m_queue_mutex;
     bool m_stop_flag; // tied to m_queue mutex and cond var
 
-    // Used to hold io_service waiting for workers to finish
-    concurrency::mutex m_stop_signal_mutex;
-    concurrency::condition_variable m_stop_signal_cv;
+    
+private:
+	io_service(const io_service& other) = delete;
+	io_service& operator=(const io_service& other) = delete;
+
+	// TODO: Find out if it makes sense to have moveable io_service
+	io_service(io_service&& other) = delete;
+	io_service& operator=(io_service&& other) = delete;
 
 public:
     io_service()
@@ -177,45 +180,50 @@ public:
 
     bool restart();
 
+	void run_pending_task();
+
 public:
     template<typename Callable, typename ...Args>
-	std::future<std::result_of_t<Callable()>>
+	std::future<std::result_of_t<Callable>>
     post(Callable func, Args ...args) {
-        // _m_check_service_valid_state(__FUNCTION__);
 		typedef std::result_of_t<Callable> return_type;
+
+        // TODO: Check validity of io_service state before proceeding 
+
 		std::packaged_task<Callable> new_task(func);
 		// obtain future of task
 		std::future<return_type> fut(new_task.get_future());
-
-		invocable inv_task(new_task, args...);
-	
-		{
-			using namespace concurrency;
-			lock_guard<mutex> lk(m_queue_mutex);
-			m_queue.push(inv_task);
-			m_queue_cv.notify_one();
-		}
-        /*notify about new task*/
-        // lock_guard<mutex> lock(m_queue_mutex);
-
+		task_type inv_task(new_task, args...);
+		
+		M_post_task(std::move(inv_task));
         return fut;
     }
 
     template<typename Callable, typename ...Args>
-    bool dispatch(Callable func, Args ...args) {
+	std::future<std::result_of_t<Callable>>
+    dispatch(Callable func, Args ...args) {
+		typedef std::result_of_t<Callable> return_type;
 
-        if( 1 /*is in pool*/ ) {
+		std::future<return_type> fut_res;
+
+        if( M_is_in_pool() ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
-            func(args...);
+            // func(args...);
+			std::packaged_task<Callable> task(func);
+			fut_res = task.get_future();
+			task(args...);
         } else {
-            post(func, args...);
+            fut_res = post(func, args...);
         }
 
-        return true;
+        return fut_res;
     }
 
 // Impl funcs
 private:
+	bool M_is_in_pool();
+	void M_post_task(invocable new_task);
+	bool M_try_fetch_task();
 	
 }; // class io_service
 
