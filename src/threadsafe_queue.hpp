@@ -1,6 +1,8 @@
 #ifndef ASIO_THREADSAFE_QUEUE_HPP
 #define ASIO_THREADSAFE_QUEUE_HPP
 
+#include "helgrind_annotations.hpp"
+
 #include "mutex.hpp"
 #include "condition_variable.hpp"
 #include "lock_guard.hpp"
@@ -26,6 +28,11 @@ private:
 	concurrency::mutex m_tail_mutex;
 	concurrency::condition_variable m_data_cv;
 	
+private:
+	// TODO: Consider adding copying, depending on T
+	threadsafe_queue(const threadsafe_queue& other) = delete;
+	threadsafe_queue& operator=(const threadsafe_queue& other) = delete;
+
 public:
 	threadsafe_queue()
 		: m_head(std::make_unique<node>()) /*dummy node*/
@@ -37,6 +44,7 @@ public:
 	void push(T in_data) {
 		using namespace concurrency;
 
+		/* new dummy node */
 		std::unique_ptr<node> new_node_ptr =
 			std::make_unique<node>();
 		node* new_tail = new_node_ptr.get();
@@ -59,21 +67,16 @@ public:
 		if(m_head.get() == m_tail)
 			return false;
 
-		out_data = std::move(m_head->data);
-		std::unique_ptr<node> old_head = std::move(m_head);
-		m_head = std::move(old_head->next_node);
+		do_pop_head(out_data);
+		return true;
 	}
 
 	void wait_and_pop(T& out_data) {
 		using namespace concurrency;
 
-		unique_lock<mutex> lk(m_head_mutex);
-		m_data_cv.wait(lk,
-				[this] () { return m_head.get() != get_tail(); });
+		unique_lock<mutex> lk(wait_for_data());
 
-		out_data = std::move(m_head->data);
-		std::unique_ptr<node> old_head = std::move(m_head);
-		m_head = std::move(old_head->next_node);
+		do_pop_head(out_data);
 	}
 
 	bool empty() {
@@ -88,6 +91,23 @@ private:
 		using namespace concurrency;
 		lock_guard<mutex> lk(m_tail_mutex);
 		return m_tail;
+	}
+
+	concurrency::unique_lock<concurrency::mutex>
+	wait_for_data() {
+		using namespace concurrency;
+		unique_lock<mutex> lk(m_head_mutex);
+		m_data_cv.wait(lk,
+				[this] () { return m_head.get() != get_tail(); });
+		return lk;
+	}
+
+	// Prereq: head_mutex - locked
+	void
+	do_pop_head(T& out_data) {
+		out_data = std::move(m_head->data);
+		std::unique_ptr<node> old_head = std::move(m_head);
+		m_head = std::move(old_head->next_node);
 	}
 
 };
