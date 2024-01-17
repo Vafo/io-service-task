@@ -46,6 +46,22 @@ public:
 
 // RAII increment / decrement thread counter
 class thread_handle {
+private:
+	// TODO: Finalize matter on safety of references
+	thread_manager& m_manager_ref;
+
+private:
+	thread_handle(const thread_handle& other) = delete;
+	thread_handle& operator=(const thread_handle& other) = delete;
+
+public:
+	thread_handle(thread_manager& manager)
+		: m_manager_ref(manager)
+	{ m_manager_ref.incr(); }
+
+	~thread_handle()
+	{ m_manager_ref.decr(); }
+
 }; // thread_handle
 
 } // namespace io_service::new_impl
