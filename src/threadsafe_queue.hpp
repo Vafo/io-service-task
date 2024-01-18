@@ -9,6 +9,7 @@
 #include "unique_lock.hpp"
 
 #include <memory> 
+#include <mutex> // std::scoped_lock
 
 namespace io_service::new_impl {
 
@@ -38,6 +39,15 @@ public:
 		: m_head(std::make_unique<node>()) /*dummy node*/
 		, m_tail(m_head.get())
 	{}
+
+	threadsafe_queue(threadsafe_queue&& other) {
+		std::scoped_lock lk(
+			m_head_mutex, m_tail_mutex,
+			other.m_head_mutex, other.m_tail_mutex);
+
+		m_head = std::move(other.m_head);
+		m_tail = other.m_tail;
+	}
 
 public:
 
