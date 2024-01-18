@@ -1,6 +1,8 @@
 #include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
+#include <iostream> // std::cerr
+
 #include <stdexcept>
 #include <thread>
 #include <chrono>
