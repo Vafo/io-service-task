@@ -11,20 +11,30 @@ namespace io_service::new_impl {
 
 TEST_CASE("interrupt_flag creation", "[interrupt_flag]") {
 	interrupt_flag manager;
-	// It is safe by design to decrement empty manager
-	REQUIRE_NOTHROW(manager.decr());
 
-	REQUIRE_NOTHROW(manager.incr());
-	REQUIRE_NOTHROW(manager.decr());
-	REQUIRE_NOTHROW(manager.decr());
+	// No one to wait for, return immediately
+	REQUIRE_NOTHROW(manager.wait_all());
 
-	REQUIRE(manager.is_stopped() == false);
-	manager.stop_all();
-	REQUIRE(manager.is_stopped() == true);
+	{
+		interrupt_handle handle = manager.make_handle();
+		REQUIRE(manager.owns(handle));
+		REQUIRE(!handle.is_stopped());
+		REQUIRE(!manager.is_stopped());
 
-	REQUIRE_THROWS(manager.incr());
-	// It is safe to decrement stopped manager
-	REQUIRE_NOTHROW(manager.decr());
+		REQUIRE(manager.is_stopped() == false);
+		manager.stop_all();
+		REQUIRE(manager.is_stopped() == true);
+	}
+
+	// No one to wait for, return immediately
+	REQUIRE_NOTHROW(manager.wait_all());
+	REQUIRE_NOTHROW(manager.stop_all());
+
+	interrupt_handle handle = manager.make_handle();
+	REQUIRE(!manager.owns(handle));
+
+	// No one to wait for, return immediately
+	REQUIRE_NOTHROW(manager.wait_all());
 }
 
 TEST_CASE("interrupt_flag stopping", "[interrupt_flag]") {
@@ -39,22 +49,27 @@ TEST_CASE("interrupt_flag stopping", "[interrupt_flag]") {
 	for(int i = 0; i < threads_num; ++i)
 		threads.push_back( jthread(
 			[&manager, &threads_entered, &threads_stopped] () {
-				interrupt_handle handle(manager);
+				interrupt_handle handle = manager.make_handle();
+
+				if(handle.is_stopped())
+					return;
+
 				++threads_entered;
-				while(!manager.is_stopped())
-					std::this_thread::yield();	
+				while(!handle.is_stopped()) {
+					std::this_thread::yield();
+				}
 				++threads_stopped;
 			}));
-
+/*
 	// busy loop until all threads pass thread handle cstr
 	// otherwise, exception will be thrown
 	while(threads_entered != threads_num)
 		std::this_thread::yield();
-
+*/
 	// cause threads to stop
 	manager.stop_all();
 	manager.wait_all();
-	REQUIRE(threads_stopped == threads_num);
+	REQUIRE(threads_stopped == threads_entered);
 }
 
 } // namespace io_service::new_impl
