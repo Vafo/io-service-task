@@ -100,7 +100,7 @@ public:
 		: m_cb_ptr(other.m_cb_ptr)
 		, m_in_thread_pool(false) // not known until incr_own
 	{
-		if(m_cb_ptr)
+		if(!empty())
 			m_in_thread_pool = m_cb_ptr->incr_own();
 
 		// State is stopped, forget about it
@@ -122,7 +122,7 @@ public:
 	}
 
 	~int_state() {
-		if(m_cb_ptr && m_in_thread_pool)
+		if(!empty() && m_in_thread_pool)
 			// Called only when in thread pool, so as to prevent late comers
 			m_cb_ptr->decr_own();
 	}
@@ -130,12 +130,15 @@ public:
 public:
 	bool is_stopped()
 	{ 
-		if(m_cb_ptr)
+		if(!empty())
 			return m_cb_ptr->is_stopped();
 
 		// if no state associated, it is stopped
 		return true;
 	}
+
+	bool empty()
+	{ return m_cb_ptr == nullptr; }
 
 private:
 	// interrupt_flag only interface
@@ -145,13 +148,13 @@ private:
 	{ return int_state(new detail::int_state_cb());  }
 
 	void do_stop() {
-		if(m_cb_ptr == nullptr)
+		if(empty())
 			throw std::runtime_error("State is empty");
 		m_cb_ptr->do_stop();
 	}
 
 	void do_wait() {
-		if(m_cb_ptr == nullptr)
+		if(empty())
 				throw std::runtime_error("State is empty");
 		m_cb_ptr->do_wait();
 	}
@@ -192,8 +195,22 @@ private:
 	{}
 
 public:
+	interrupt_handle(interrupt_handle&& other)
+		: m_state(std::move(other.m_state))
+	{}
+
+	interrupt_handle& operator=(interrupt_handle&& other)
+	{ 
+		m_state = std::move(other.m_state);
+		return *this;
+	}
+
+public:
 	bool is_stopped()
 	{ return m_state.is_stopped(); }
+
+	bool empty()
+	{ return m_state.empty(); }
 	
 public:
 	bool operator==(const interrupt_handle& other)
@@ -219,6 +236,9 @@ public:
 		: m_state(int_state::S_make_int_state())
 	{}
 
+	~interrupt_flag()
+	{ stop_all(); /*let everyone free*/ }
+
 public:
 	// Wait for all threads to finish
 	void wait_all()
@@ -236,6 +256,15 @@ public:
 
 	bool owns(const interrupt_handle& handle)
 	{ return m_state == handle.m_state; }
+
+public:
+	void swap(interrupt_flag& other) {
+		using std::swap;
+		swap(m_state, other.m_state);
+	}
+
+	friend void swap(interrupt_flag& a, interrupt_flag&b)
+	{ a.swap(b); }
 
 }; // class interrupt_flag
 
