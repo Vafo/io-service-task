@@ -70,7 +70,7 @@ public:
 		using namespace concurrency;
 		
 		lock_guard<mutex> lk(m_head_mutex);
-		if(m_head.get() == m_tail)
+		if(m_head.get() == get_tail())
 			return false;
 
 		do_pop_head(out_data);
