@@ -1,21 +1,23 @@
-#include "thread_manager.hpp"
+#include "interrupt_flag.hpp"
 
 #include "lock_guard.hpp"
+#include <memory>
 #include <stdexcept>
 
 
 namespace io_service::new_impl {
 
-void thread_manager::wait_all() {
+void interrupt_flag::wait_all() {
+	std::shared_ptr<int> a;
 	using namespace concurrency;
 	unique_lock<mutex> lk(m_stop_signal_mutex);
 	m_stop_signal_cv.wait(lk, [this] () { return m_counter == 0; });
 }
 
-void thread_manager::stop_all()
+void interrupt_flag::stop_all()
 { m_done = true; }
 
-void thread_manager::incr() {
+void interrupt_flag::incr() {
 	if(m_done)
 		// TODO: Should handle throw exception?
 		// Or just count up, and decrement on destruction?
@@ -27,7 +29,7 @@ void thread_manager::incr() {
 	++m_counter;
 }
 
-void thread_manager::decr() {
+void interrupt_flag::decr() {
 	if(m_counter == 0)
 		return;
 
@@ -38,7 +40,7 @@ void thread_manager::decr() {
 	}
 }
 
-bool thread_manager::is_stopped()
+bool interrupt_flag::is_stopped()
 { return m_done; }
 
 

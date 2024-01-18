@@ -4,7 +4,7 @@ add_subdirectory(common)
 
 add_library(io_service_impl
 	io_service.cpp
-	thread_manager.cpp)
+	interrupt_flag.cpp)
 
 target_include_directories(io_service_impl PUBLIC .)
 

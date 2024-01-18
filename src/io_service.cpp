@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "io_service.hpp"
-#include "thread_manager.hpp"
+#include "interrupt_flag.hpp"
 
 #include <memory>
 #include <thread>
@@ -135,10 +135,10 @@ bool io_service::restart() {
 
 namespace new_impl {
 
-thread_local thread_manager* local_owner_ptr;
+thread_local interrupt_flag* local_owner_ptr;
 
 void io_service::run() {
-	thread_handle handle(m_manager);
+	interrupt_handle handle(m_manager);
 	local_owner_ptr = &m_manager; /*this makes io_service unmovable*/
 
 	while(!m_manager.is_stopped())

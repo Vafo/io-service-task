@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "thread_manager.hpp"
+#include "interrupt_flag.hpp"
 
 #include <thread> // std::this_thread::yield()
 #include <atomic>
@@ -9,8 +9,8 @@
 
 namespace io_service::new_impl {
 
-TEST_CASE("thread_manager creation", "[thread_manager]") {
-	thread_manager manager;
+TEST_CASE("interrupt_flag creation", "[interrupt_flag]") {
+	interrupt_flag manager;
 	// It is safe by design to decrement empty manager
 	REQUIRE_NOTHROW(manager.decr());
 
@@ -27,10 +27,10 @@ TEST_CASE("thread_manager creation", "[thread_manager]") {
 	REQUIRE_NOTHROW(manager.decr());
 }
 
-TEST_CASE("thread_manager stopping", "[thread_manager]") {
+TEST_CASE("interrupt_flag stopping", "[interrupt_flag]") {
 	int const threads_num = 10;
 
-	thread_manager manager;
+	interrupt_flag manager;
 	std::atomic<int> threads_entered(0);
 	std::atomic<int> threads_stopped(0);
 
@@ -39,7 +39,7 @@ TEST_CASE("thread_manager stopping", "[thread_manager]") {
 	for(int i = 0; i < threads_num; ++i)
 		threads.push_back( jthread(
 			[&manager, &threads_entered, &threads_stopped] () {
-				thread_handle handle(manager);
+				interrupt_handle handle(manager);
 				++threads_entered;
 				while(!manager.is_stopped())
 					std::this_thread::yield();	

@@ -5,11 +5,12 @@
 #include "condition_variable.hpp"
 
 #include <atomic>
+#include <memory>
 
 
 namespace io_service::new_impl {
 
-class thread_manager {
+class interrupt_flag {
 private:
 	std::atomic<bool> m_done;
 	std::atomic<int> m_counter; // of threads
@@ -19,11 +20,11 @@ private:
     concurrency::condition_variable m_stop_signal_cv;
 
 private:
-	thread_manager(const thread_manager& other) = delete;
-	thread_manager& operator=(const thread_manager& other) = delete;
+	interrupt_flag(const interrupt_flag& other) = delete;
+	interrupt_flag& operator=(const interrupt_flag& other) = delete;
 
 public:
-	thread_manager()
+	interrupt_flag()
 		: m_done(false)
 		, m_counter(0)
 	{}
@@ -41,28 +42,28 @@ public:
 
 	bool is_stopped();
 
-}; // class thread_manager
+}; // class interrupt_flag
 
 
 // RAII increment / decrement thread counter
-class thread_handle {
+class interrupt_handle {
 private:
 	// TODO: Finalize matter on safety of references
-	thread_manager& m_manager_ref;
+	interrupt_flag& m_manager_ref;
 
 private:
-	thread_handle(const thread_handle& other) = delete;
-	thread_handle& operator=(const thread_handle& other) = delete;
+	interrupt_handle(const interrupt_handle& other) = delete;
+	interrupt_handle& operator=(const interrupt_handle& other) = delete;
 
 public:
-	thread_handle(thread_manager& manager)
+	interrupt_handle(interrupt_flag& manager)
 		: m_manager_ref(manager)
 	{ m_manager_ref.incr(); }
 
-	~thread_handle()
+	~interrupt_handle()
 	{ m_manager_ref.decr(); }
 
-}; // thread_handle
+}; // interrupt_handle
 
 } // namespace io_service::new_impl
 

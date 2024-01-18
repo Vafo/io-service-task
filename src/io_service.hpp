@@ -17,7 +17,7 @@
 
 #include <future>
 #include "invocable.hpp"
-#include "thread_manager.hpp"
+#include "interrupt_flag.hpp"
 #include "threadsafe_queue.hpp"
 
 namespace io_service {
@@ -148,7 +148,7 @@ private:
 
 private:
 	threadsafe_queue<task_type> m_global_queue;
-	thread_manager m_manager;
+	interrupt_flag m_manager;
 /*
 	vector<local_work_steal_queue_ptr> local_queues;
 	interrupt_flags global_int_flags;
