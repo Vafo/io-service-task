@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "io_service.hpp"
 #include "interrupt_flag.hpp"
 
@@ -135,11 +133,19 @@ bool io_service::restart() {
 
 namespace new_impl {
 
-thread_local interrupt_flag* local_owner_ptr;
+thread_local std::unique_ptr<interrupt_handle> local_int_handle_ptr;
 
 void io_service::run() {
-	interrupt_handle handle(m_manager);
-	local_owner_ptr = &m_manager; /*this makes io_service unmovable*/
+	// Check if it is valid to interact with io_service
+	M_check_validity();
+	// Store pool-related data in thread_locals
+	// interrupt_handle handle(m_manager);
+	local_int_handle_ptr =
+		std::make_unique<interrupt_handle>(m_manager.make_handle());
+/*
+	if(local_int_handle_ptr->empty())
+		throw service_stopped_error("Service is stopped");
+*/
 
 	while(!m_manager.is_stopped())
 		run_pending_task();
@@ -156,7 +162,7 @@ void io_service::run_pending_task() {
 	}
 }
 
-bool io_service::stop() {
+void io_service::stop() {
 	m_manager.stop_all();
 	m_manager.wait_all();
 
@@ -164,7 +170,12 @@ bool io_service::stop() {
 	M_clear_tasks();
 }
 
-bool io_service::restart() {
+void io_service::restart() {
+	// set new interrupt manager
+	interrupt_flag sink;
+	m_manager.swap(sink);
+
+	M_clear_tasks();
 }
 
 // TODO: Learn if perfect forwarding could be suitable here
@@ -177,15 +188,22 @@ void io_service::M_post_task(invocable new_task) {
 	if( 0 /*local_queue present*/) {
 		// push to local
 	} else {
-		// TODO: To reduce std::move, make argument rval ref?
+		// TODO: in order to reduce std::move, make argument rval ref?
 		// push to global
 		m_global_queue.push(std::move(new_task));
 	}
 }
 
 bool io_service::M_is_in_pool() {
-	// TODO: ugly solution
-	return local_owner_ptr == &m_manager;
+	if(local_int_handle_ptr) // TODO: ugly solution
+		return m_manager.owns(*local_int_handle_ptr);
+
+	return false;
+}
+
+void io_service::M_check_validity() {
+	if(m_manager.is_stopped())	
+		throw service_stopped_error("Service is stopped");
 }
 
 void io_service::M_clear_tasks() {

@@ -142,6 +142,16 @@ private:
 
 namespace new_impl {
 
+// Service is stopped
+class service_stopped_error: public std::logic_error {
+public:
+    service_stopped_error(std::string in_str): std::logic_error(in_str)
+    {}
+
+    virtual ~service_stopped_error() throw() /*according to std exceptions*/{}
+}; // class service_stopped_error
+
+
 class io_service {
 private:
 	typedef invocable task_type;
@@ -182,12 +192,12 @@ public:
 	std::future<return_type>
     post(Callable func, Args ...args) {
         // TODO: Check validity of io_service state before proceeding 
+		M_check_validity();
 
 		std::packaged_task<Signature> new_task(func);
 		// obtain future of task
 		std::future<return_type> fut(new_task.get_future());
 		task_type inv_task(std::move(new_task), args...);
-		
 		M_post_task(std::move(inv_task));
         return fut;
     }
@@ -214,9 +224,9 @@ public:
     }
 
 public:
-    bool stop();
+    void stop();
 
-    bool restart();
+    void restart();
 
 // Impl funcs
 private:
@@ -224,6 +234,7 @@ private:
 	void M_post_task(invocable new_task);
 	bool M_is_in_pool();
 
+	void M_check_validity() noexcept(false);
 	void M_clear_tasks();
 
 }; // class io_service
