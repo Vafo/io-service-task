@@ -40,14 +40,10 @@ public:
 		, m_tail(m_head.get())
 	{}
 
-	threadsafe_queue(threadsafe_queue&& other) {
-		std::scoped_lock lk(
-			m_head_mutex, m_tail_mutex,
-			other.m_head_mutex, other.m_tail_mutex);
-
-		m_head = std::move(other.m_head);
-		m_tail = other.m_tail;
-	}
+	// TODO: Find out if other should have appropriate state
+	threadsafe_queue(threadsafe_queue&& other)
+		: threadsafe_queue()
+	{ swap(other); }
 
 public:
 
@@ -94,6 +90,22 @@ public:
 		lock_guard<mutex> lk(m_head_mutex);
 		return m_head.get() == get_tail();
 	}
+
+public:
+	void swap(threadsafe_queue& other) {
+		using std::swap;
+
+		std::scoped_lock lk(
+			m_head_mutex, m_tail_mutex,
+			other.m_head_mutex, other.m_tail_mutex);
+		
+		swap(m_head, other.m_head);
+		swap(m_tail, other.m_tail);
+	}
+
+	friend
+	void swap(threadsafe_queue& a, threadsafe_queue& b)
+	{ a.swap(b); }
 
 // Impl funcs
 private:
