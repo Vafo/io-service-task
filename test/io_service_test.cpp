@@ -1,6 +1,7 @@
 #include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
+#include <stdexcept>
 #include <thread>
 #include <chrono>
 
@@ -9,7 +10,7 @@
 #include "jthread.hpp"
 
 
-namespace io_service {
+namespace io_service::new_impl {
 
 static void worker_func(io_service* serv_ptr) {
     try
@@ -21,7 +22,8 @@ static void worker_func(io_service* serv_ptr) {
         // Should run() continue or abort (?)
         // std::cerr << e.what() << '\n';
     }
-    catch(...) {
+    catch(const std::runtime_error& e) {
+        std::cerr << e.what() << '\n';
         REQUIRE(false); /*worker thread has unhandled exception*/
     }
 }
