@@ -18,10 +18,11 @@ private:
 	// Number of "owners". Manager + pool threads
 	// This counter should go down to 1, so that Manager can be sure that everyone stopped
 	std::atomic<int> m_owner_cnt;
+
 	// Counter for paused threads can be added, when Manager decides to pause the pool
 	// in which case, threads are not executing tasks, but waiting for Manager to start again
 
-	// Used to hold io_service waiting for workers to finish
+	// Used to hold Manager waiting for workers to finish
     concurrency::mutex m_stop_signal_mutex;
     concurrency::condition_variable m_stop_signal_cv;
 
@@ -41,7 +42,7 @@ public:
 	void do_stop()
 	{ m_done = true; }
 
-	bool is_stopped()
+	bool is_stopped() const
 	{ return m_done; }
 
 
@@ -77,43 +78,39 @@ public:
 
 
 // shared_ptr like state
-// that notifies cond_var every time there is onle one reference
+// that notifies cond_var every time there is only one reference
 class int_state {
 private:
 	detail::int_state_cb* m_cb_ptr;
-	bool m_in_thread_pool; // Its own local state, artificial
 
 private:
 	// special cstr for interrupt_flag
 	int_state(detail::int_state_cb* new_ptr)
 		: m_cb_ptr(new_ptr)
-		, m_in_thread_pool(true)
 	{}
 
 public:
 	int_state()
 		: m_cb_ptr(nullptr)
-		, m_in_thread_pool(false)
 	{}
 
 	int_state(const int_state& other)
 		: m_cb_ptr(other.m_cb_ptr)
-		, m_in_thread_pool(false) // not known until incr_own
 	{
+		bool is_in_thread_pool = false;
 		if(!empty())
-			m_in_thread_pool = m_cb_ptr->incr_own();
+			is_in_thread_pool = m_cb_ptr->incr_own();
 
-		// State is stopped, forget about it
-		if(!m_in_thread_pool)
+		// State is stopped, could not become owner
+		// Forget about it
+		if(!is_in_thread_pool)
 			m_cb_ptr = nullptr;
 	}
 
 	int_state(int_state&& other)
 		: m_cb_ptr(other.m_cb_ptr)
-		, m_in_thread_pool(other.m_in_thread_pool)
 	{ 
 		other.m_cb_ptr = nullptr;
-		other.m_in_thread_pool = false;
 	}
 
 	int_state& operator=(int_state other) {
@@ -122,13 +119,13 @@ public:
 	}
 
 	~int_state() {
-		if(!empty() && m_in_thread_pool)
+		if(!empty())
 			// Called only when in thread pool, so as to prevent late comers
 			m_cb_ptr->decr_own();
 	}
 
 public:
-	bool is_stopped()
+	bool is_stopped() const
 	{ 
 		if(!empty())
 			return m_cb_ptr->is_stopped();
@@ -137,7 +134,7 @@ public:
 		return true;
 	}
 
-	bool empty()
+	bool empty() const
 	{ return m_cb_ptr == nullptr; }
 
 private:
@@ -160,14 +157,13 @@ private:
 	}
 
 public:
-	bool operator==(const int_state& other)
+	bool operator==(const int_state& other) const
 	{ return m_cb_ptr == other.m_cb_ptr; }
 
 public:
 	void swap(int_state& other) {
 		using std::swap;
 		swap(m_cb_ptr, other.m_cb_ptr);
-		swap(m_in_thread_pool, other.m_in_thread_pool);
 	}
 
 	friend
@@ -184,7 +180,7 @@ private:
 	int_state m_state;
 
 private:
-	interrupt_handle() = delete;
+	interrupt_handle() = delete; /*created only by interrupt_flag*/
 	interrupt_handle(const interrupt_handle& other) = delete;
 	interrupt_handle& operator=(const interrupt_handle& other) = delete;
 
@@ -206,10 +202,10 @@ public:
 	}
 
 public:
-	bool is_stopped()
+	bool is_stopped() const
 	{ return m_state.is_stopped(); }
 
-	bool empty()
+	bool empty() const
 	{ return m_state.empty(); }
 	
 public:
@@ -247,14 +243,14 @@ public:
 	void stop_all()
 	{ m_state.do_stop(); }
 
-	bool is_stopped()
+	bool is_stopped() const
 	{ return m_state.is_stopped(); }
 
 public:
 	interrupt_handle make_handle()
 	{ return interrupt_handle(m_state); }
 
-	bool owns(const interrupt_handle& handle)
+	bool owns(const interrupt_handle& handle) const
 	{ return m_state == handle.m_state; }
 
 public:
