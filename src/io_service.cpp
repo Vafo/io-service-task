@@ -22,8 +22,17 @@ void io_service::run() {
 		local_int_handle_ptr,
 		std::make_unique<interrupt_handle>(m_manager.make_handle()));
 
-	while(!local_int_handle_ptr->is_stopped())
-		run_pending_task();
+	auto is_stopped =
+		[this] () { return local_int_handle_ptr->is_stopped(); };
+
+	while(!is_stopped()) {
+		task_type task;
+		if(!M_wait_and_pop_task(task, is_stopped))
+			break; /*could not fetch task. Was interrupted by predicate*/
+
+		/*execute task*/
+		task();
+	}
 
 	// Release thread related resources, as we leave run() 
 	// Released by thread_data_mngr
@@ -47,11 +56,9 @@ void io_service::stop() {
 }
 
 void io_service::restart() {
-	// set new interrupt manager
-	interrupt_flag sink;
-	m_manager.swap(sink);
-
-	M_clear_tasks();
+	/*explicit*/
+	io_service empty_guy;
+	*this = std::move(empty_guy);
 }
 
 // TODO: Learn if perfect forwarding could be suitable here

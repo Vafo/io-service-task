@@ -7,6 +7,7 @@
 #include "condition_variable.hpp"
 #include "lock_guard.hpp"
 #include "unique_lock.hpp"
+#include "false_func.hpp"
 
 #include <memory> 
 #include <mutex> // std::scoped_lock
@@ -78,18 +79,33 @@ public:
 		return true;
 	}
 
-	void wait_and_pop(T& out_data) {
+	template<typename Predicate = false_func>
+	bool wait_and_pop(T& out_data, Predicate pred = Predicate()) {
 		using namespace concurrency;
 
-		unique_lock<mutex> lk(M_wait_for_data());
+		unique_lock<mutex> lk(M_wait_for_data(pred));
+
+		// if predicate is true, no data was fetched
+		if(pred())
+			return false;
 
 		M_do_pop_head(out_data);
+		return true;
 	}
 
+public:
 	bool empty() {
 		using namespace concurrency;
 		lock_guard<mutex> lk(m_head_mutex);
 		return m_head.get() == M_get_tail();
+	}
+
+	// External signal to unblock threads waiting for data
+	void signal()
+	{ 
+		using namespace concurrency;
+		lock_guard<mutex> lk(m_head_mutex);
+		m_data_cv.notify_all();
 	}
 
 public:
@@ -116,12 +132,20 @@ private:
 		return m_tail;
 	}
 
+	// Blocking wait for data
+	// which can be awaken by true predicate and external signal()
+	template<typename Predicate = false_func>
 	concurrency::unique_lock<concurrency::mutex>
-	M_wait_for_data() {
+	M_wait_for_data(Predicate pred = Predicate()) {
 		using namespace concurrency;
 		unique_lock<mutex> lk(m_head_mutex);
+		// If both queue not empty AND pred is true
+		// Then no data will be fetched
 		m_data_cv.wait(lk,
-				[this] () { return m_head.get() != M_get_tail(); });
+			[this, &pred] () { 
+				return (m_head.get() != M_get_tail())
+					|| pred();
+			});
 		return lk;
 	}
 

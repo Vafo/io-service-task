@@ -1,18 +1,23 @@
 #ifndef ASIO_THREAD_MANAGER_HPP
 #define ASIO_THREAD_MANAGER_HPP
 
-#include "lock_guard.hpp"
+// #include "lock_guard.hpp"
+#include "function.hpp"
 #include "mutex.hpp"
 #include "condition_variable.hpp"
 
 #include <atomic>
 #include <stdexcept>
+#include <vector>
 
 namespace io_service {
 
 namespace detail {
 
 class int_state_cb {
+public:
+	typedef func::function<void()> stop_cb_type;
+
 private:
 	std::atomic<bool> m_done;
 	// Number of "owners". Manager + pool threads
@@ -25,6 +30,9 @@ private:
 	// Used to hold Manager waiting for workers to finish
     concurrency::mutex m_stop_signal_mutex;
     concurrency::condition_variable m_stop_signal_cv;
+
+	// No need to lock, since will only be called by interrupt_flag, the only owner
+	std::vector<stop_cb_type> stop_cbs;
 
 public: /*maybe private?*/
 	int_state_cb()
@@ -40,7 +48,16 @@ public:
 	}
 
 	void do_stop()
-	{ m_done = true; }
+	{
+		m_done = true;
+		for(std::vector<stop_cb_type>::iterator it = stop_cbs.begin();
+			it != stop_cbs.end(); ++it
+		)
+			(*it)();
+	}
+
+	void add_stop_cb(func::function<void()>&& cb_fn)
+	{ stop_cbs.push_back(cb_fn); }
 
 	bool is_stopped() const
 	{ return m_done; }
@@ -64,7 +81,8 @@ public:
 		if(cur_cnt == 1) {
 			// Notify Manager
 			using namespace concurrency;
-			lock_guard<mutex> lk(m_stop_signal_mutex);
+			// Redundant to lock on signaling
+			// lock_guard<mutex> lk(m_stop_signal_mutex);
 			m_stop_signal_cv.notify_one();
 		} else if(cur_cnt == 0) {
 			// delete itself
@@ -152,8 +170,15 @@ private:
 
 	void do_wait() {
 		if(empty())
-				throw std::runtime_error("State is empty");
+			throw std::runtime_error("State is empty");
 		m_cb_ptr->do_wait();
+	}
+
+	void add_stop_cb(func::function<void()>&& cb_fn) {
+		if(empty())
+			throw std::runtime_error("State is empty");
+		m_cb_ptr->add_stop_cb(
+			std::forward<func::function<void()>>(cb_fn));
 	}
 
 public:
@@ -232,6 +257,15 @@ public:
 		: m_state(int_state::S_make_int_state())
 	{}
 
+	interrupt_flag(interrupt_flag&& other)
+		: m_state(std::move(other.m_state))
+	{}
+
+	interrupt_flag& operator=(interrupt_flag&& other) {
+		interrupt_flag(std::move(other)).swap(*this);
+		return *this;
+	}
+
 	~interrupt_flag()
 	{ signal_stop(); /*let everyone free*/ }
 
@@ -252,6 +286,11 @@ public:
 
 	bool owns(const interrupt_handle& handle) const
 	{ return m_state == handle.m_state; }
+
+	// Callbacks to be called when Manager sets stop state
+	void add_callback_on_stop(func::function<void()> cb) {
+		m_state.add_stop_cb(std::move(cb));	
+	}
 
 public:
 	void swap(interrupt_flag& other) {

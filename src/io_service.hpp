@@ -3,6 +3,7 @@
 
 #include "helgrind_annotations.hpp"
 
+#include <iostream>
 #include <stdexcept>
 #include <type_traits>
 
@@ -10,6 +11,7 @@
 #include "invocable.hpp"
 #include "interrupt_flag.hpp"
 #include "threadsafe_queue.hpp"
+#include "false_func.hpp"
 
 namespace io_service {
 
@@ -35,13 +37,23 @@ private:
 	io_service(const io_service& other) = delete;
 	io_service& operator=(const io_service& other) = delete;
 
-	// TODO: Find out if it makes sense to have moveable io_service
-	io_service(io_service&& other) = delete;
-	io_service& operator=(io_service&& other) = delete;
+private:
+	// Move semantics, used by restart() func
+	// TODO: Find out if there is a way to do it better
+	io_service(io_service&& other)
+		: io_service() // TODO: is it fine to leave other in proper state?
+	{ swap(other); /*[other] has to remain in valid state*/ }
+
+	io_service& operator=(io_service&& other) {
+		io_service(std::move(other)).swap(*this);
+		return *this;
+	}
 
 public:
-    io_service()
-    {}
+    io_service() {
+		m_manager.add_callback_on_stop(
+			[this] () { m_global_queue.signal(); });
+	}
 
     ~io_service() {
         stop();
@@ -128,6 +140,18 @@ public:
 
     void restart();
 
+private:
+	// Used only by Move Semantics
+	void swap(io_service& other) {
+		using std::swap;
+
+		std::cout << "SWAP S" << std::endl;
+		swap(m_global_queue, other.m_global_queue);
+		std::cout << "SWAP Q" << std::endl;
+		swap(m_manager, other.m_manager);
+		std::cout << "SWAP E" << std::endl;
+	}
+
 // Impl funcs
 private:
 
@@ -143,7 +167,15 @@ private:
 		m_global_queue.push(std::move(new_task));
 	}
 
-	bool M_try_fetch_task(invocable& out_task);
+	bool M_try_fetch_task(task_type& out_task);
+
+	// Returns true if task was fetched
+	// Otherwise, predicate has disrupted it
+	template<typename Predicate = false_func>
+	bool M_wait_and_pop_task(task_type& out_task, Predicate pred = Predicate()) {
+		return m_global_queue.wait_and_pop(out_task, pred);
+	}
+
 	bool M_is_in_pool();
 
 	void M_check_validity() noexcept(false);

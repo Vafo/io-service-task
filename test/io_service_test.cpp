@@ -342,23 +342,23 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
     REQUIRE(a == num_iterations * tasks_complete);
 
     SECTION("Reuse non restarted service") {
-            int capture_tasks_complete = tasks_complete;
-            add_workers();
-            REQUIRE_THROWS(add_tasks());
+		int capture_tasks_complete = tasks_complete;
+		add_workers();
+		REQUIRE_THROWS(add_tasks());
 
-            finish_service();
+		finish_service();
 
-            REQUIRE(a == num_iterations * capture_tasks_complete);
+		REQUIRE(a == num_iterations * capture_tasks_complete);
     }
 
     SECTION("Reuse restarted service") {
-            serv.restart();
-            REQUIRE_NOTHROW(add_tasks());
-            add_workers();
+		serv.restart();
+		REQUIRE_NOTHROW(add_tasks());
+		add_workers();
 
-            finish_service();
+		finish_service();
 
-            REQUIRE(a == num_iterations * tasks_complete);
+		REQUIRE(a == num_iterations * tasks_complete);
     }
 }
 
