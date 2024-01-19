@@ -11,7 +11,7 @@
 #include <memory> 
 #include <mutex> // std::scoped_lock
 
-namespace io_service::new_impl {
+namespace io_service {
 
 template<typename T>
 class threadsafe_queue {
@@ -134,7 +134,7 @@ private:
 
 };
 
-} // namespace io_service::new_impl
+} // namespace io_service
 
 
 #endif

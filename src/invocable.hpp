@@ -7,7 +7,7 @@
 #include <memory>
 #include <tuple>
 
-namespace io_service::new_impl {
+namespace io_service {
 struct invocable_int {
 	virtual ~invocable_int() {}
 
@@ -98,7 +98,6 @@ public:
 
 }; // struct invocable
 
-
-} // namespace io_service::new_impl
+} // namespace io_service
 
 #endif // ASIO_INVOCABLE_HPP

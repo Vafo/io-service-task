@@ -7,7 +7,7 @@
 #include "jthread.hpp"
 
 
-namespace io_service::new_impl {
+namespace io_service {
 
 TEST_CASE("interrupt_flag creation", "[interrupt_flag]") {
 	interrupt_flag manager;
@@ -72,5 +72,5 @@ TEST_CASE("interrupt_flag stopping", "[interrupt_flag]") {
 	REQUIRE(threads_stopped == threads_entered);
 }
 
-} // namespace io_service::new_impl
+} // namespace io_service
 

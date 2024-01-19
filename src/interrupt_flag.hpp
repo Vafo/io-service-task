@@ -8,7 +8,7 @@
 #include <atomic>
 #include <stdexcept>
 
-namespace io_service::new_impl {
+namespace io_service {
 
 namespace detail {
 
@@ -268,6 +268,6 @@ public:
 
 }; // class interrupt_flag
 
-} // namespace io_service::new_impl
+} // namespace io_service
 
 #endif

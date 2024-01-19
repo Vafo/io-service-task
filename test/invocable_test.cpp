@@ -5,8 +5,6 @@
 
 namespace io_service {
 
-namespace new_impl {
-
 TEST_CASE("invocable cstr & call") {
 	const int var1 = 123;
 	const int var2 = 5123;
@@ -86,7 +84,5 @@ TEST_CASE("make_invocable") {
 		std::jthread tr2(check_futures, fvec.begin(), fvec.end());
 	}
 }
-
-} // namespace new_impl
 
 } // namespace io_service

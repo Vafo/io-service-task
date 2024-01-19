@@ -12,7 +12,7 @@
 #include "jthread.hpp"
 
 
-namespace io_service::new_impl {
+namespace io_service {
 
 static void worker_func(io_service* serv_ptr) {
     try
@@ -358,8 +358,5 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
             REQUIRE(a == num_iterations * tasks_complete);
     }
 }
-
-namespace new_impl {
-} // namespace new_impl
 
 } // namespace io_service

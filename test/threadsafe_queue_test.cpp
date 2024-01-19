@@ -8,7 +8,7 @@
 #include "jthread.hpp"
 
 
-namespace io_service::new_impl {
+namespace io_service {
 
 TEST_CASE("queue creation") {
 	const int test_val = 123;
@@ -126,4 +126,4 @@ TEST_CASE("queue accessed by multiple threads") {
 	REQUIRE(all_true);
 };
 
-} // namespace io_service::new_impl
+} // namespace io_service
