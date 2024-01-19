@@ -37,17 +37,8 @@ private:
 	io_service(const io_service& other) = delete;
 	io_service& operator=(const io_service& other) = delete;
 
-private:
-	// Move semantics, used by restart() func
-	// TODO: Find out if there is a way to do it better
-	io_service(io_service&& other)
-		: io_service() // TODO: is it fine to leave other in proper state?
-	{ swap(other); /*[other] has to remain in valid state*/ }
-
-	io_service& operator=(io_service&& other) {
-		io_service(std::move(other)).swap(*this);
-		return *this;
-	}
+	io_service(io_service&& other) = delete;
+	io_service& operator=(io_service&& other) = delete;
 
 public:
     io_service() {
@@ -139,18 +130,6 @@ public:
     void stop();
 
     void restart();
-
-private:
-	// Used only by Move Semantics
-	void swap(io_service& other) {
-		using std::swap;
-
-		std::cout << "SWAP S" << std::endl;
-		swap(m_global_queue, other.m_global_queue);
-		std::cout << "SWAP Q" << std::endl;
-		swap(m_manager, other.m_manager);
-		std::cout << "SWAP E" << std::endl;
-	}
 
 // Impl funcs
 private:

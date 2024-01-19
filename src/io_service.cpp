@@ -56,9 +56,14 @@ void io_service::stop() {
 }
 
 void io_service::restart() {
-	/*explicit*/
-	io_service empty_guy;
-	*this = std::move(empty_guy);
+	stop();
+
+	interrupt_flag sink;
+	m_manager.swap(sink);
+
+	// reason of immovability of io_service
+	m_manager.add_callback_on_stop(
+		[this] () { m_global_queue.signal(); });
 }
 
 // TODO: Learn if perfect forwarding could be suitable here

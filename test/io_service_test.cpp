@@ -367,8 +367,8 @@ class sorter {
 private:
 	// Order matters, as pool should dstr first
 	// in order to stop worker threads, so they could become joinable
-	std::vector<concurrency::jthread> threads;	
 	io_service pool;
+	std::vector<concurrency::jthread> threads;	
 
 private:
 	sorter(size_t num_of_threads) {
@@ -376,6 +376,13 @@ private:
 			threads.push_back(
 				concurrency::jthread(worker_func, &pool));
 	}
+
+	// This is needed to prevent
+	// threads accessing deleted io_service.
+	// TODO: come up with some shared state
+	// which covers case of threads accessing dead io_service
+	~sorter()
+	{ pool.stop(); }
 
 private:
 	std::list<T> do_sort(std::list<T>& chunk_data) {
@@ -407,7 +414,8 @@ private:
 			pool.run_pending_task();
 		}
 
-		result.splice(result.begin(), new_lower.get());
+		new_lower_chunk = new_lower.get();
+		result.splice(result.begin(), new_lower_chunk);
 		return result;
 	}
 

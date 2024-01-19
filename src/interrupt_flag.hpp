@@ -3,6 +3,7 @@
 
 // #include "lock_guard.hpp"
 #include "function.hpp"
+#include "lock_guard.hpp"
 #include "mutex.hpp"
 #include "condition_variable.hpp"
 
@@ -82,7 +83,7 @@ public:
 			// Notify Manager
 			using namespace concurrency;
 			// Redundant to lock on signaling
-			// lock_guard<mutex> lk(m_stop_signal_mutex);
+			lock_guard<mutex> lk(m_stop_signal_mutex);
 			m_stop_signal_cv.notify_one();
 		} else if(cur_cnt == 0) {
 			// delete itself
@@ -211,7 +212,7 @@ private:
 
 private:
 	// Used by interrupt_flag
-	interrupt_handle(int_state state)
+	interrupt_handle(const int_state& state)
 		: m_state(state) 
 	{}
 
