@@ -40,13 +40,13 @@ public:
 		, m_tail(m_head.get())
 	{}
 
-	// TODO: Find out if other should have appropriate state
+	// TODO: Find out if [other] should have appropriate state
+	// Post: [other] is in consistent empty state
 	threadsafe_queue(threadsafe_queue&& other)
 		: threadsafe_queue()
 	{ swap(other); }
 
 public:
-
 	void push(T in_data) {
 		using namespace concurrency;
 
@@ -66,29 +66,30 @@ public:
 		m_data_cv.notify_one();
 	}
 
+public:
 	bool try_pop(T& out_data) {
 		using namespace concurrency;
 		
 		lock_guard<mutex> lk(m_head_mutex);
-		if(m_head.get() == get_tail())
+		if(m_head.get() == M_get_tail())
 			return false;
 
-		do_pop_head(out_data);
+		M_do_pop_head(out_data);
 		return true;
 	}
 
 	void wait_and_pop(T& out_data) {
 		using namespace concurrency;
 
-		unique_lock<mutex> lk(wait_for_data());
+		unique_lock<mutex> lk(M_wait_for_data());
 
-		do_pop_head(out_data);
+		M_do_pop_head(out_data);
 	}
 
 	bool empty() {
 		using namespace concurrency;
 		lock_guard<mutex> lk(m_head_mutex);
-		return m_head.get() == get_tail();
+		return m_head.get() == M_get_tail();
 	}
 
 public:
@@ -109,30 +110,30 @@ public:
 
 // Impl funcs
 private:
-	node* get_tail() {
+	node* M_get_tail() {
 		using namespace concurrency;
 		lock_guard<mutex> lk(m_tail_mutex);
 		return m_tail;
 	}
 
 	concurrency::unique_lock<concurrency::mutex>
-	wait_for_data() {
+	M_wait_for_data() {
 		using namespace concurrency;
 		unique_lock<mutex> lk(m_head_mutex);
 		m_data_cv.wait(lk,
-				[this] () { return m_head.get() != get_tail(); });
+				[this] () { return m_head.get() != M_get_tail(); });
 		return lk;
 	}
 
 	// Prereq: head_mutex - locked
 	void
-	do_pop_head(T& out_data) {
+	M_do_pop_head(T& out_data) {
 		out_data = std::move(m_head->data);
 		std::unique_ptr<node> old_head = std::move(m_head);
 		m_head = std::move(old_head->next_node);
 	}
 
-};
+}; // class threadsafe_queue
 
 } // namespace io_service
 

@@ -8,6 +8,7 @@
 #include <tuple>
 
 namespace io_service {
+
 struct invocable_int {
 	virtual ~invocable_int() {}
 
@@ -15,11 +16,10 @@ struct invocable_int {
 }; // struct invocable_int
 
 
-template<typename Callable, typename TupleT>
+template<typename SignatureT, typename TupleT>
 struct invocable_impl: public invocable_int {
 public:
-	// typedef std::result_of_t<Callable> return_type;
-	typedef std::packaged_task<Callable> task_type;
+	typedef std::packaged_task<SignatureT> task_type;
 
 private:
 	task_type m_task;
@@ -32,7 +32,7 @@ private:
 public:
 	invocable_impl(task_type&& task, TupleT&& args)
 		: m_task(std::move(task))
-		, m_args(args)
+		, m_args(std::move(args))
 	{}
 	
 	void call() {
@@ -57,7 +57,7 @@ public:
 	{}
 
 	invocable(invocable&& other)
-		: m_inv_ptr(other.m_inv_ptr.release())
+		: m_inv_ptr(std::move(other.m_inv_ptr))
 	{}
 
 	invocable& operator=(invocable&& other) {
@@ -68,14 +68,14 @@ public:
 public:
 	// TODO: Simplify interface.
 	// Let user pass packaged task and args
-	template<typename Callable, typename ...Args>
+	template<typename SignatureT, typename ...Args>
 	invocable(
-		std::packaged_task<Callable>&& task,
+		std::packaged_task<SignatureT>&& task,
 		Args... args
 	)
 		: m_inv_ptr( 
 			std::make_unique<
-				invocable_impl<Callable, std::tuple<Args...>>>(
+				invocable_impl<SignatureT, std::tuple<Args...>>>(
 					std::move(task), std::make_tuple(args...)))
 	{}
 
@@ -84,6 +84,8 @@ public:
 		if(m_inv_ptr)
 			m_inv_ptr->call();
 
+		// Stored package can be called only once
+		// erase it
 		m_inv_ptr.reset();
 	}
 
