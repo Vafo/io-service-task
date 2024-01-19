@@ -30,10 +30,7 @@ private:
 private:
 	threadsafe_queue<task_type> m_global_queue;
 	interrupt_flag m_manager;
-/*
-	vector<local_work_steal_queue_ptr> local_queues;
-*/
-    
+   
 private:
 	io_service(const io_service& other) = delete;
 	io_service& operator=(const io_service& other) = delete;
@@ -95,6 +92,8 @@ public:
     }
 
 public:
+	// Post/Dispatch tasks without future
+
     template<typename Callable, typename ...Args,
 		typename return_type = std::result_of_t<Callable(Args...)>,
 		typename Signature = return_type(Args...)>
@@ -135,18 +134,13 @@ private:
 	template<typename SignatureT, typename ...Args>
 	void M_post_task(std::packaged_task<SignatureT>&& pack_task, Args... args) {
 		invocable new_task(
-				std::forward<
-					std::packaged_task<SignatureT>>(pack_task),
-				args...);
+			std::forward<
+				std::packaged_task<SignatureT>>(pack_task),
+			args...);
 
-		if( M_is_in_pool() /*in [this] pool*/
-			&& 0 /*local_queue present*/) {
-			// push to local
-		} else {
-			// TODO: in order to reduce std::move, make argument rval ref?
-			// push to global
-			m_global_queue.push(std::move(new_task));
-		}
+		// TODO: in order to reduce std::move, make argument rval ref?
+		// push to global
+		m_global_queue.push(std::move(new_task));
 	}
 
 	bool M_try_fetch_task(invocable& out_task);

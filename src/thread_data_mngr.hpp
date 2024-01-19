@@ -4,16 +4,12 @@
 #include <memory>
 
 #include "interrupt_flag.hpp"
-// #include "local_queue.hpp"
 
 namespace io_service {
 
 // RAII manager of thread_local resources
 class thread_data_mngr {
 	std::unique_ptr<interrupt_handle>& m_int_hndl_ref;
-/*
-	std::unique_ptr<local_queue> m_lcl_que_ref;
-*/
 
 private:
 	thread_data_mngr() = delete; /*explicit*/
@@ -27,10 +23,7 @@ private:
 public:
 	thread_data_mngr(
 		std::unique_ptr<interrupt_handle>& int_hndl,
-		/*ref to local_queue_ptr*/
-
 		std::unique_ptr<interrupt_handle> allocated_handle
-		/*allocated local_queue, as rval ref I guess*/
 	)
 		: m_int_hndl_ref(int_hndl)
 	{

@@ -1,8 +1,11 @@
+#include "catch2/matchers/catch_matchers_range_equals.hpp"
 #include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
+#include <future>
 #include <iostream> // std::cerr
 
+#include <list>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
@@ -357,6 +360,87 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
 
             REQUIRE(a == num_iterations * tasks_complete);
     }
+}
+
+template<typename T>
+class sorter {
+private:
+	// Order matters, as pool should dstr first
+	// in order to stop worker threads, so they could become joinable
+	std::vector<concurrency::jthread> threads;	
+	io_service pool;
+
+private:
+	sorter(size_t num_of_threads) {
+		for(size_t i = 0; i< num_of_threads; ++i)
+			threads.push_back(
+				concurrency::jthread(worker_func, &pool));
+	}
+
+private:
+	std::list<T> do_sort(std::list<T>& chunk_data) {
+		if(chunk_data.empty())
+			return chunk_data;
+
+		std::list<T> result;
+		result.splice(result.begin(), chunk_data, chunk_data.begin());
+		T const& partition_val = *result.begin();
+
+		typename std::list<T>::iterator divide_point =
+			std::partition(chunk_data.begin(), chunk_data.end(),
+				[&] (T const& val) { return val < partition_val; });
+
+		std::list<T> new_lower_chunk;
+		new_lower_chunk.splice(new_lower_chunk.end(),
+			chunk_data, chunk_data.begin(), divide_point);
+
+		std::future<std::list<T>> new_lower =
+			/*used bind, since io_service::post cant refer to mem funcs*/
+			pool.post_waitable(std::bind(&sorter::do_sort, this, std::move(new_lower_chunk)));
+		
+		std::list<T> new_higher(do_sort(chunk_data)); /*direct execution*/
+		result.splice(result.end(), new_higher);
+
+		while(new_lower.wait_for(std::chrono::seconds(0)) ==
+			std::future_status::timeout
+		) {
+			pool.run_pending_task();
+		}
+
+		result.splice(result.begin(), new_lower.get());
+		return result;
+	}
+
+private:
+	template<typename D>
+	friend
+	std::list<D> parallel_quick_sort(std::list<D> input);
+
+}; // struct sorter
+
+template<typename T>
+std::list<T> parallel_quick_sort(std::list<T> input) {
+	const int num_threads = 5;
+
+	if(input.empty())
+		return input;
+
+	sorter<T> sort(num_threads);
+	std::list<T> result = sort.do_sort(input);
+
+	return result;
+}
+
+TEST_CASE("sort data using io_service") {
+	std::list<int> input_data = {312, 23, 512, 12, 42, 512, 0, -1};	
+
+	std::list<int> potential_sorted =
+		parallel_quick_sort(input_data);
+
+	std::list<int> real_sorted = input_data;
+	real_sorted.sort(); 
+
+	REQUIRE_THAT(potential_sorted, Catch::Matchers::RangeEquals(real_sorted));
 }
 
 } // namespace io_service
