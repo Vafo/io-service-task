@@ -1,5 +1,6 @@
 #include "io_service.hpp"
 #include "interrupt_flag.hpp"
+#include "thread_data_mngr.hpp"
 
 #include <memory>
 #include <thread>
@@ -18,13 +19,15 @@ void io_service::run() {
 	// If io_service is stopped, handle will be empty
 	// thus, won't execute any tasks and return from run()
 	// Alternative to throwing exception ^^^^^^^^^^^^^^^^^
-	local_int_handle_ptr =
-		std::make_unique<interrupt_handle>(m_manager.make_handle());
+	thread_data_mngr data_mngr(
+			local_int_handle_ptr,
+
+			std::make_unique<interrupt_handle>(m_manager.make_handle()));
 
 	while(!local_int_handle_ptr->is_stopped())
 		run_pending_task();
 
-	// release handle
+	// Release thread related resources, as we leave run() 
 }
 
 void io_service::run_pending_task() {
