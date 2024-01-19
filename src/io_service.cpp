@@ -10,17 +10,18 @@ thread_local std::unique_ptr<interrupt_handle> local_int_handle_ptr;
 
 void io_service::run() {
 	// Check if it is valid to interact with io_service
+	// Throws if io_service is stopped
 	M_check_validity();
+
 	// Store pool-related data in thread_locals
 	// interrupt_handle handle(m_manager);
+	// If io_service is stopped, handle will be empty
+	// thus, won't execute any tasks and return from run()
+	// Alternative to throwing exception ^^^^^^^^^^^^^^^^^
 	local_int_handle_ptr =
 		std::make_unique<interrupt_handle>(m_manager.make_handle());
-/*
-	if(local_int_handle_ptr->empty())
-		throw service_stopped_error("Service is stopped");
-*/
 
-	while(!m_manager.is_stopped())
+	while(!local_int_handle_ptr->is_stopped())
 		run_pending_task();
 
 	// release handle
@@ -36,7 +37,7 @@ void io_service::run_pending_task() {
 }
 
 void io_service::stop() {
-	m_manager.stop_all();
+	m_manager.signal_stop();
 	m_manager.wait_all();
 
 	// Clear task queues
@@ -55,16 +56,6 @@ void io_service::restart() {
 bool io_service::M_try_fetch_task(invocable& task) {
 	// TODO: fetch from local / others / global
 	return m_global_queue.try_pop(task);
-}
-
-void io_service::M_post_task(invocable new_task) {
-	if( 0 /*local_queue present*/) {
-		// push to local
-	} else {
-		// TODO: in order to reduce std::move, make argument rval ref?
-		// push to global
-		m_global_queue.push(std::move(new_task));
-	}
 }
 
 bool io_service::M_is_in_pool() {

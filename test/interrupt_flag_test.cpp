@@ -22,13 +22,13 @@ TEST_CASE("interrupt_flag creation", "[interrupt_flag]") {
 		REQUIRE(!manager.is_stopped());
 
 		REQUIRE(manager.is_stopped() == false);
-		manager.stop_all();
+		manager.signal_stop();
 		REQUIRE(manager.is_stopped() == true);
 	}
 
 	// No one to wait for, return immediately
 	REQUIRE_NOTHROW(manager.wait_all());
-	REQUIRE_NOTHROW(manager.stop_all());
+	REQUIRE_NOTHROW(manager.signal_stop());
 
 	interrupt_handle handle = manager.make_handle();
 	REQUIRE(!manager.owns(handle));
@@ -67,7 +67,7 @@ TEST_CASE("interrupt_flag stopping", "[interrupt_flag]") {
 		std::this_thread::yield();
 */
 	// cause threads to stop
-	manager.stop_all();
+	manager.signal_stop();
 	manager.wait_all();
 	REQUIRE(threads_stopped == threads_entered);
 }

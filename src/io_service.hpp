@@ -2,18 +2,9 @@
 #define IO_SERVICE_H
 
 #include "helgrind_annotations.hpp"
-#include <queue>
-#include <atomic>
 
 #include <stdexcept>
 #include <type_traits>
-
-#include "mutex.hpp"
-#include "lock_guard.hpp"
-#include "condition_variable.hpp"
-
-#include "function.hpp"
-#include "shared_ptr.hpp"
 
 #include <future>
 #include "invocable.hpp"
@@ -41,7 +32,6 @@ private:
 	interrupt_flag m_manager;
 /*
 	vector<local_work_steal_queue_ptr> local_queues;
-	interrupt_flags global_int_flags;
 */
     
 private:
@@ -70,15 +60,16 @@ public:
 		typename return_type = std::result_of_t<Callable(Args...)>,
 		typename Signature = return_type(Args...)>
 	std::future<return_type>
-    post(Callable func, Args ...args) {
-        // TODO: Check validity of io_service state before proceeding 
+    post_waitable(Callable func, Args ...args) {
+        // Check validity of io_service state before proceeding 
 		M_check_validity();
 
 		std::packaged_task<Signature> new_task(func);
 		// obtain future of task
 		std::future<return_type> fut(new_task.get_future());
-		task_type inv_task(std::move(new_task), args...);
-		M_post_task(std::move(inv_task));
+
+		M_post_task(std::move(new_task), args...);
+
         return fut;
     }
 
@@ -86,7 +77,7 @@ public:
 		typename return_type = std::result_of_t<Callable(Args...)>,
 		typename Signature = return_type(Args...)>
 	std::future<return_type>
-    dispatch(Callable func, Args ...args) {
+    dispatch_waitable(Callable func, Args ...args) {
 		std::future<return_type> fut_res;
 
         if( M_is_in_pool() ) {
@@ -97,10 +88,40 @@ public:
 			// No need to create task_type, invoke packaged_task directly
 			task(args...);
         } else {
-            fut_res = post(func, args...);
+            fut_res = post_waitable(func, args...);
         }
 
         return fut_res;
+    }
+
+public:
+    template<typename Callable, typename ...Args,
+		typename return_type = std::result_of_t<Callable(Args...)>,
+		typename Signature = return_type(Args...)>
+	void
+    post(Callable func, Args ...args) {
+        // Check validity of io_service state before proceeding 
+		M_check_validity();
+
+		std::packaged_task<Signature> new_task(func);
+
+		M_post_task(std::move(new_task), args...);
+    }
+
+    template<typename Callable, typename ...Args,
+		typename return_type = std::result_of_t<Callable(Args...)>,
+		typename Signature = return_type(Args...)>
+	void
+    dispatch(Callable func, Args ...args) {
+        if( M_is_in_pool() ) {
+            /*if this_thread is among m_thread_pool, execute input task immediately*/
+            // func(args...);
+			std::packaged_task<Signature> task(func);
+			// No need to create task_type, invoke packaged_task directly
+			task(args...);
+        } else {
+        	post(func, args...);
+        }
     }
 
 public:
@@ -110,8 +131,25 @@ public:
 
 // Impl funcs
 private:
+
+	template<typename SignatureT, typename ...Args>
+	void M_post_task(std::packaged_task<SignatureT>&& pack_task, Args... args) {
+		invocable new_task(
+				std::forward<
+					std::packaged_task<SignatureT>>(pack_task),
+				args...);
+
+		if( M_is_in_pool() /*in [this] pool*/
+			&& 0 /*local_queue present*/) {
+			// push to local
+		} else {
+			// TODO: in order to reduce std::move, make argument rval ref?
+			// push to global
+			m_global_queue.push(std::move(new_task));
+		}
+	}
+
 	bool M_try_fetch_task(invocable& out_task);
-	void M_post_task(invocable new_task);
 	bool M_is_in_pool();
 
 	void M_check_validity() noexcept(false);

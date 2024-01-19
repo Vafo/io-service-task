@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include <vector>
+
 #include "io_service.hpp"
 #include "jthread.hpp"
 

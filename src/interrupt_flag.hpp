@@ -233,14 +233,14 @@ public:
 	{}
 
 	~interrupt_flag()
-	{ stop_all(); /*let everyone free*/ }
+	{ signal_stop(); /*let everyone free*/ }
 
 public:
 	// Wait for all threads to finish
 	void wait_all()
 	{ m_state.do_wait(); }
 
-	void stop_all()
+	void signal_stop()
 	{ m_state.do_stop(); }
 
 	bool is_stopped() const
