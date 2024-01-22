@@ -358,113 +358,113 @@ TEST_CASE("io_service: service reusage", "[io_service][restart]") {
     REQUIRE(a == num_iterations * tasks_complete);
 
     SECTION("Reuse non restarted service") {
-		int capture_tasks_complete = tasks_complete;
-		add_workers();
-		REQUIRE_THROWS(add_tasks());
+        int capture_tasks_complete = tasks_complete;
+        add_workers();
+        REQUIRE_THROWS(add_tasks());
 
-		finish_service();
+        finish_service();
 
-		REQUIRE(a == num_iterations * capture_tasks_complete);
+        REQUIRE(a == num_iterations * capture_tasks_complete);
     }
 
     SECTION("Reuse restarted service") {
-		serv.restart();
-		REQUIRE_NOTHROW(add_tasks());
-		add_workers();
+        serv.restart();
+        REQUIRE_NOTHROW(add_tasks());
+        add_workers();
 
-		finish_service();
+        finish_service();
 
-		REQUIRE(a == num_iterations * tasks_complete);
+        REQUIRE(a == num_iterations * tasks_complete);
     }
 }
 
 template<typename T>
 class sorter {
 private:
-	// Order matters, as pool should dstr first
-	// in order to stop worker threads, so they could become joinable
-	memory::shared_ptr<io_service> pool_ptr;
-	std::vector<concurrency::jthread> threads;	
+    // Order matters, as pool should dstr first
+    // in order to stop worker threads, so they could become joinable
+    memory::shared_ptr<io_service> pool_ptr;
+    std::vector<concurrency::jthread> threads;  
 
 private:
-	sorter(size_t num_of_threads)
-		: pool_ptr( memory::make_shared<io_service>() ) 
-	{
-		for(size_t i = 0; i< num_of_threads; ++i)
-			threads.push_back(
-				concurrency::jthread(worker_func_shr_ptr, pool_ptr));
-	}
+    sorter(size_t num_of_threads)
+        : pool_ptr( memory::make_shared<io_service>() ) 
+    {
+        for(size_t i = 0; i< num_of_threads; ++i)
+            threads.push_back(
+                concurrency::jthread(worker_func_shr_ptr, pool_ptr));
+    }
 
-	// This is needed to prevent
-	// threads accessing deleted io_service.
-	~sorter()
-	{ pool_ptr->stop(); }
-
-private:
-	std::list<T> do_sort(std::list<T>& chunk_data) {
-		if(chunk_data.empty())
-			return chunk_data;
-
-		std::list<T> result;
-		result.splice(result.begin(), chunk_data, chunk_data.begin());
-		T const& partition_val = *result.begin();
-
-		typename std::list<T>::iterator divide_point =
-			std::partition(chunk_data.begin(), chunk_data.end(),
-				[&] (T const& val) { return val < partition_val; });
-
-		std::list<T> new_lower_chunk;
-		new_lower_chunk.splice(new_lower_chunk.end(),
-			chunk_data, chunk_data.begin(), divide_point);
-
-		std::future<std::list<T>> new_lower =
-			/*used bind, since io_service::post cant refer to mem funcs*/
-			pool_ptr->post_waitable(std::bind(&sorter::do_sort, this, std::move(new_lower_chunk)));
-		
-		std::list<T> new_higher(do_sort(chunk_data)); /*direct execution*/
-		result.splice(result.end(), new_higher);
-
-		while(new_lower.wait_for(std::chrono::seconds(0)) ==
-			std::future_status::timeout
-		) {
-			pool_ptr->run_pending_task();
-		}
-
-		new_lower_chunk = new_lower.get();
-		result.splice(result.begin(), new_lower_chunk);
-		return result;
-	}
+    // This is needed to prevent
+    // threads accessing deleted io_service.
+    ~sorter()
+    { pool_ptr->stop(); }
 
 private:
-	template<typename D>
-	friend
-	std::list<D> parallel_quick_sort(std::list<D> input);
+    std::list<T> do_sort(std::list<T>& chunk_data) {
+        if(chunk_data.empty())
+            return chunk_data;
+
+        std::list<T> result;
+        result.splice(result.begin(), chunk_data, chunk_data.begin());
+        T const& partition_val = *result.begin();
+
+        typename std::list<T>::iterator divide_point =
+            std::partition(chunk_data.begin(), chunk_data.end(),
+                [&] (T const& val) { return val < partition_val; });
+
+        std::list<T> new_lower_chunk;
+        new_lower_chunk.splice(new_lower_chunk.end(),
+            chunk_data, chunk_data.begin(), divide_point);
+
+        std::future<std::list<T>> new_lower =
+            /*used bind, since io_service::post cant refer to mem funcs*/
+            pool_ptr->post_waitable(std::bind(&sorter::do_sort, this, std::move(new_lower_chunk)));
+        
+        std::list<T> new_higher(do_sort(chunk_data)); /*direct execution*/
+        result.splice(result.end(), new_higher);
+
+        while(new_lower.wait_for(std::chrono::seconds(0)) ==
+            std::future_status::timeout
+        ) {
+            pool_ptr->run_pending_task();
+        }
+
+        new_lower_chunk = new_lower.get();
+        result.splice(result.begin(), new_lower_chunk);
+        return result;
+    }
+
+private:
+    template<typename D>
+    friend
+    std::list<D> parallel_quick_sort(std::list<D> input);
 
 }; // struct sorter
 
 template<typename T>
 std::list<T> parallel_quick_sort(std::list<T> input) {
-	const int num_threads = 5;
+    const int num_threads = 5;
 
-	if(input.empty())
-		return input;
+    if(input.empty())
+        return input;
 
-	sorter<T> sort(num_threads);
-	std::list<T> result = sort.do_sort(input);
+    sorter<T> sort(num_threads);
+    std::list<T> result = sort.do_sort(input);
 
-	return result;
+    return result;
 }
 
 TEST_CASE("sort data using io_service") {
-	std::list<int> input_data = {312, 23, 512, 12, 42, 512, 0, -1};	
+    std::list<int> input_data = {312, 23, 512, 12, 42, 512, 0, -1}; 
 
-	std::list<int> potential_sorted =
-		parallel_quick_sort(input_data);
+    std::list<int> potential_sorted =
+        parallel_quick_sort(input_data);
 
-	std::list<int> real_sorted = input_data;
-	real_sorted.sort(); 
+    std::list<int> real_sorted = input_data;
+    real_sorted.sort(); 
 
-	REQUIRE_THAT(potential_sorted, Catch::Matchers::RangeEquals(real_sorted));
+    REQUIRE_THAT(potential_sorted, Catch::Matchers::RangeEquals(real_sorted));
 }
 
 } // namespace io_service
