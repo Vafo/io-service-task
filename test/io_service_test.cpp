@@ -1,4 +1,3 @@
-#include "catch2/matchers/catch_matchers_range_equals.hpp"
 #include "helgrind_annotations.hpp"
 #include <catch2/catch_all.hpp>
 
@@ -13,11 +12,28 @@
 #include "io_service.hpp"
 
 #include "jthread.hpp"
+#include "shared_ptr.hpp"
 
 
 namespace io_service {
 
 static void worker_func(io_service* serv_ptr) {
+    try
+    {
+        serv_ptr->run();
+    }
+    catch(const service_stopped_error& e)
+    {
+        // Should run() continue or abort (?)
+        // std::cerr << e.what() << '\n';
+    }
+    catch(const std::runtime_error& e) {
+        std::cerr << e.what() << '\n';
+        REQUIRE(false); /*worker thread has unhandled exception*/
+    }
+}
+
+static void worker_func_shr_ptr(memory::shared_ptr<io_service> serv_ptr) {
     try
     {
         serv_ptr->run();
@@ -367,22 +383,22 @@ class sorter {
 private:
 	// Order matters, as pool should dstr first
 	// in order to stop worker threads, so they could become joinable
-	io_service pool;
+	memory::shared_ptr<io_service> pool_ptr;
 	std::vector<concurrency::jthread> threads;	
 
 private:
-	sorter(size_t num_of_threads) {
+	sorter(size_t num_of_threads)
+		: pool_ptr( memory::make_shared<io_service>() ) 
+	{
 		for(size_t i = 0; i< num_of_threads; ++i)
 			threads.push_back(
-				concurrency::jthread(worker_func, &pool));
+				concurrency::jthread(worker_func_shr_ptr, pool_ptr));
 	}
 
 	// This is needed to prevent
 	// threads accessing deleted io_service.
-	// TODO: come up with some shared state
-	// which covers case of threads accessing dead io_service
 	~sorter()
-	{ pool.stop(); }
+	{ pool_ptr->stop(); }
 
 private:
 	std::list<T> do_sort(std::list<T>& chunk_data) {
@@ -403,7 +419,7 @@ private:
 
 		std::future<std::list<T>> new_lower =
 			/*used bind, since io_service::post cant refer to mem funcs*/
-			pool.post_waitable(std::bind(&sorter::do_sort, this, std::move(new_lower_chunk)));
+			pool_ptr->post_waitable(std::bind(&sorter::do_sort, this, std::move(new_lower_chunk)));
 		
 		std::list<T> new_higher(do_sort(chunk_data)); /*direct execution*/
 		result.splice(result.end(), new_higher);
@@ -411,7 +427,7 @@ private:
 		while(new_lower.wait_for(std::chrono::seconds(0)) ==
 			std::future_status::timeout
 		) {
-			pool.run_pending_task();
+			pool_ptr->run_pending_task();
 		}
 
 		new_lower_chunk = new_lower.get();
