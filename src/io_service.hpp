@@ -1,121 +1,164 @@
 #ifndef IO_SERVICE_H
 #define IO_SERVICE_H
 
-#include <set>
-#include <queue>
-#include <stop_token>
-#include <mutex> /*std::lock*/
-#include <atomic>
+#include "helgrind_annotations.hpp"
 
-#include "thread.hpp"
-#include "mutex.hpp"
-#include "condition_variable.hpp"
+#include <iostream>
+#include <stdexcept>
+#include <type_traits>
 
-#include "function.hpp"
-#include "shared_ptr.h"
-
+#include <future>
+#include "invocable.hpp"
+#include "interrupt_flag.hpp"
+#include "threadsafe_queue.hpp"
+#include "false_func.hpp"
 
 namespace io_service {
 
+// Service is stopped
+class service_stopped_error: public std::logic_error {
+public:
+    service_stopped_error(std::string in_str): std::logic_error(in_str)
+    {}
+
+    virtual ~service_stopped_error() throw() /*according to std exceptions*/{}
+}; // class service_stopped_error
+
+
 class io_service {
+private:
+    typedef invocable task_type;
+
+private:
+    threadsafe_queue<task_type> m_global_queue;
+    interrupt_flag m_manager;
+   
+private:
+    io_service(const io_service& other) = delete;
+    io_service& operator=(const io_service& other) = delete;
+
+    io_service(io_service&& other) = delete;
+    io_service& operator=(io_service&& other) = delete;
 
 public:
-    struct thread_counters {
-        thread_counters():
-            threads_total(0),
-            threads_idle(0)
-        {}
-
-        alignas(int) std::atomic<int> threads_total;
-        alignas(int) std::atomic<int> threads_idle;
-    }; // struct thread_counters
-
-    typedef util::shared_ptr<thread_counters> thread_counters_ptr_type;
-
-
-    io_service(): 
-        m_thread_counters_ptr( new thread_counters() /*TODO: consider alignment*/)
-    {}
+    io_service() {
+        m_manager.add_callback_on_stop(
+            [this] () { m_global_queue.signal(); });
+    }
 
     ~io_service() {
         stop();
     }
 
+public:
     void run();
 
-    bool stop();
+    void run_pending_task();
 
-    template<typename Callable, typename ...Args>
-    bool post(Callable func, Args ...args) {
-        using namespace concurrency;
-        _m_check_service_valid_state(__FUNCTION__);
-        
-        /*notify about new task*/
-        unique_lock<mutex> lock(m_queue_mutex);
-        
-        invocable new_task(func, args...);
-        m_queue.push(new_task);
-        m_queue_cv.notify_one(); /*notify one. one task = one thread*/
+public:
+    template<typename Callable, typename ...Args,
+        typename return_type = std::result_of_t<Callable(Args...)>,
+        typename Signature = return_type(Args...)>
+    std::future<return_type>
+    post_waitable(Callable func, Args ...args) {
+        // Check validity of io_service state before proceeding 
+        M_check_validity();
 
-        return true;
+        std::packaged_task<Signature> new_task(func);
+        // obtain future of task
+        std::future<return_type> fut(new_task.get_future());
+
+        M_post_task(std::move(new_task), args...);
+
+        return fut;
     }
 
-    template<typename Callable, typename ...Args>
-    bool dispatch(Callable func, Args ...args) {
+    template<typename Callable, typename ...Args,
+        typename return_type = std::result_of_t<Callable(Args...)>,
+        typename Signature = return_type(Args...)>
+    std::future<return_type>
+    dispatch_waitable(Callable func, Args ...args) {
+        std::future<return_type> fut_res;
 
-        if( _m_is_in_pool() ) {
+        if( M_is_in_pool() ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
-            func(args...);
+            // func(args...);
+            std::packaged_task<Signature> task(func);
+            fut_res = task.get_future();
+            // No need to create task_type, invoke packaged_task directly
+            task(args...);
+        } else {
+            fut_res = post_waitable(func, args...);
+        }
+
+        return fut_res;
+    }
+
+public:
+    // Post/Dispatch tasks without future
+
+    template<typename Callable, typename ...Args,
+        typename return_type = std::result_of_t<Callable(Args...)>,
+        typename Signature = return_type(Args...)>
+    void
+    post(Callable func, Args ...args) {
+        // Check validity of io_service state before proceeding 
+        M_check_validity();
+
+        std::packaged_task<Signature> new_task(func);
+
+        M_post_task(std::move(new_task), args...);
+    }
+
+    template<typename Callable, typename ...Args,
+        typename return_type = std::result_of_t<Callable(Args...)>,
+        typename Signature = return_type(Args...)>
+    void
+    dispatch(Callable func, Args ...args) {
+        if( M_is_in_pool() ) {
+            /*if this_thread is among m_thread_pool, execute input task immediately*/
+            // func(args...);
+            std::packaged_task<Signature> task(func);
+            // No need to create task_type, invoke packaged_task directly
+            task(args...);
         } else {
             post(func, args...);
         }
-
-        return true;
     }
 
-    std::size_t task_size() {
-        using namespace concurrency;
+public:
+    void stop();
 
-        lock_guard<mutex> lock(m_queue_mutex);
-        return m_queue.size();
-    }
+    void restart();
 
-    bool empty()
-    { return task_size() == 0; }
-
-    bool all_idle()
-    { return m_thread_counters_ptr->threads_total == m_thread_counters_ptr->threads_idle; }
-
+// Impl funcs
 private:
-    struct invocable {
-        invocable(): m_lambda() {}
 
-        template<typename Callable, typename ...Args>
-        invocable(Callable func, Args ...args) {
-            m_lambda = [=] () -> void { func(args...); };
-        }
+    template<typename SignatureT, typename ...Args>
+    void M_post_task(std::packaged_task<SignatureT>&& pack_task, Args... args) {
+        invocable new_task(
+            std::forward<
+                std::packaged_task<SignatureT>>(pack_task),
+            args...);
 
-        void operator()() {
-            m_lambda();
-        }
+        // TODO: in order to reduce std::move, make argument rval ref?
+        // push to global
+        m_global_queue.push(std::move(new_task));
+    }
 
-    private:
-        func::function<void()> m_lambda;
-    }; // struct invocable
+    bool M_try_fetch_task(task_type& out_task);
 
+    // Returns true if task was fetched
+    // Otherwise, predicate has disrupted it
+    template<typename Predicate = false_func>
+    bool M_wait_and_pop_task(task_type& out_task, Predicate pred = Predicate()) {
+        return m_global_queue.wait_and_pop(out_task, pred);
+    }
 
-    void _m_insert_into_pool();
-    bool _m_is_in_pool();
-    void _m_release_from_pool();
-    void _m_process_tasks();
-    void _m_check_service_valid_state(const char* func_name);
-    
-    std::queue<invocable> m_queue;
-    concurrency::condition_variable m_queue_cv;
-    concurrency::mutex m_queue_mutex;
+    bool M_is_in_pool();
 
-    std::stop_source m_stop_src;
-    thread_counters_ptr_type m_thread_counters_ptr;
+    void M_check_validity() noexcept(false);
+    void M_clear_tasks();
 
 }; // class io_service
 

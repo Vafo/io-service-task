@@ -1,96 +1,93 @@
-#include <iostream>
-
 #include "io_service.hpp"
+#include "interrupt_flag.hpp"
+#include "thread_data_mngr.hpp"
+
 #include <memory>
+#include <thread>
 
 namespace io_service {
 
-thread_local io_service::thread_counters_ptr_type local_thread_counters_ptr;
-
-void io_service::_m_insert_into_pool() {
-    local_thread_counters_ptr = m_thread_counters_ptr;
-    local_thread_counters_ptr->threads_total++;
-}
-
-bool io_service::_m_is_in_pool() {
-    return local_thread_counters_ptr == m_thread_counters_ptr;
-}
-
-void io_service::_m_release_from_pool() {
-    local_thread_counters_ptr->threads_total--;
-    local_thread_counters_ptr = thread_counters_ptr_type(); /*swap with empty*/
-}
-
-void io_service::_m_check_service_valid_state(const char* func_name) {
-    if(m_stop_src.stop_requested()) {
-        std::string err_msg = func_name;
-        err_msg += "io_service: service was already stopped. It can not be populated";
-        throw std::runtime_error(err_msg);
-    }
-}
-
-void io_service::_m_process_tasks() {
-    while(true) {
-        invocable cur_task;
-
-        // Wait for task
-        {
-            using namespace concurrency;
-
-            unique_lock<mutex> lock(m_queue_mutex);
-            
-            m_thread_counters_ptr->threads_idle++; /*thread is idle when it waits for task*/
-            m_queue_cv.wait(
-                lock,
-                [&] () {
-                    /*stop_src does send notification to cond var so as to stop it from waiting tasks*/ 
-                    return (m_queue.size() > 0) || m_stop_src.stop_requested(); 
-                }
-            );
-            m_thread_counters_ptr->threads_idle--; /*thread is not idle when it gets task*/
-            
-            // Check if stop was requested
-            if(m_stop_src.stop_requested())
-                return;
-
-            cur_task = m_queue.front();
-            m_queue.pop();
-        }
-
-        // Execute task
-        cur_task();
-    }
-}
+thread_local std::unique_ptr<interrupt_handle> local_int_handle_ptr;
 
 void io_service::run() {
-    _m_insert_into_pool(); /*add self to m_thread_pool*/
-    _m_process_tasks();
-    _m_release_from_pool();
+    // Check if it is valid to interact with io_service
+    // Throws if io_service is stopped
+    M_check_validity();
+
+    // Store pool-related data in thread_locals
+    // If io_service is stopped, handle will be empty
+    // thus, won't execute any tasks and return from run()
+    // Alternative to throwing exception ^^^^^^^^^^^^^^^^^
+    thread_data_mngr data_mngr(
+        local_int_handle_ptr,
+        std::make_unique<interrupt_handle>(m_manager.make_handle()));
+
+    auto is_stopped =
+        [this] () { return local_int_handle_ptr->is_stopped(); };
+
+    while(!is_stopped()) {
+        task_type task;
+        if(!M_wait_and_pop_task(task, is_stopped))
+            break; /*could not fetch task. Was interrupted by predicate*/
+
+        /*execute task*/
+        task();
+    }
+
+    // Release thread related resources, as we leave run() 
+    // Released by thread_data_mngr
 }
 
-bool io_service::stop()
-{ 
-    using namespace concurrency;
-
-    m_stop_src.request_stop();
-
-    { // notify about stop using m_queue_cv, since workers are waiting on it
-        unique_lock<mutex> lock(m_queue_mutex);
-        m_queue_cv.notify_all(); /*notify all*/
+void io_service::run_pending_task() {
+    invocable task;
+    if(M_try_fetch_task(task)) {
+        task();
+    } else {
+        std::this_thread::yield();
     }
+}
 
-    /*erase tasks queue*/
-    std::queue<invocable> empty_queue;
-    {
-        lock_guard<mutex> task_lock(m_queue_mutex);
-        m_queue.swap( empty_queue ); /*clear queue by swapping with empty queue*/
-    }
+void io_service::stop() {
+    m_manager.signal_stop();
+    m_manager.wait_all();
 
-    // TODO: Wait for all threads to terminate run()
-    while(m_thread_counters_ptr->threads_total != 0)
-        ;
+    // Clear task queues
+    M_clear_tasks();
+}
 
-    return true;
+void io_service::restart() {
+    stop();
+
+    interrupt_flag sink;
+    m_manager.swap(sink);
+
+    // reason of immovability of io_service
+    m_manager.add_callback_on_stop(
+        [this] () { m_global_queue.signal(); });
+}
+
+// TODO: Learn if perfect forwarding could be suitable here
+bool io_service::M_try_fetch_task(invocable& task) {
+    // TODO: fetch from local / others / global
+    return m_global_queue.try_pop(task);
+}
+
+bool io_service::M_is_in_pool() {
+    if(local_int_handle_ptr) // TODO: ugly solution
+        return m_manager.owns(*local_int_handle_ptr);
+
+    return false;
+}
+
+void io_service::M_check_validity() {
+    if(m_manager.is_stopped())  
+        throw service_stopped_error("Service is stopped");
+}
+
+void io_service::M_clear_tasks() {
+    // clear global queue
+    threadsafe_queue<task_type> sink(
+        std::move(m_global_queue));
 }
 
 } // namespace io_service
