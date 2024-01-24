@@ -69,19 +69,26 @@ public:
 
         bool trigger = m_data(
             [&handle] (strand_data& data) {
+                // if it is a worker thread, and strand is being runned
+                // just push handle into queue
                 if(data.is_running) {
                     data.que.push(handle);
                     return false;
                 }
 
+                // if it is a worker thread and strand is not runned
                 data.is_running = true;
                 return true;
             });
 
+        // if this thread is going to run the strand 
         if(trigger) {
+            // set callstack context for handle
             typename callstack<strand>::context cntx(this);
+            // execute handle immediately
             handle();
 
+            // continue executing strand handlers
             run();
         }
 
