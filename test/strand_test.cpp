@@ -234,9 +234,10 @@ TEST_CASE("strand in running strand") {
     REQUIRE(!failed_dispatch);
 }
 
-TEST_CASE("dispatch into non-running strand") {
+TEST_CASE("dispatch") {
     const int num_threads = 10;
     const int num_strand_tasks = 100;
+    const int num_unlucky_dispatchers = 10;
 
     memory::shared_ptr<io_service> srvc_ptr = 
         memory::make_shared<io_service>();
@@ -251,12 +252,32 @@ TEST_CASE("dispatch into non-running strand") {
     std::atomic<bool> is_exclusive(true);
     std::atomic<bool> failed_dispatch(false);
 
+    std::vector<concurrency::jthread> trs;
+
+    auto start_threads =
+        [&trs, &srvc_ptr] () {
+            for(int i = 0; i < num_threads; ++i)
+                trs.push_back(concurrency::jthread(worker_thread, srvc_ptr));
+        };
+
+    auto stop_and_test =
+        [&] () {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1ms);
+
+            srvc_ptr->stop();
+            REQUIRE(is_exclusive);
+            REQUIRE(!failed_dispatch);
+        };
+
     // dispatched into strand
     auto dispatched_task =
         [&strand_mutex, &is_exclusive, &failed_dispatch]
-        <typename cntx_cntr_valid_Predicate>
+        <   typename strand_task_Callable,
+            typename cntx_cntr_valid_Predicate>
         (
             std::weak_ptr<handles_type> handle_ptr,
+            strand_task_Callable strand_task,
             cntx_cntr_valid_Predicate cntx_pred
         ) {
             if(handle_ptr.expired())
@@ -279,6 +300,9 @@ TEST_CASE("dispatch into non-running strand") {
                 return;
             }
 
+            // specific task, given to this strand handler
+            strand_task();
+
             // increment dispatched task done
             if(counter)
                 ++(*counter);
@@ -287,12 +311,12 @@ TEST_CASE("dispatch into non-running strand") {
     // posted to thread pool
     auto pool_task =
         [num_strand_tasks, &failed_dispatch, dispatched_task]
-        <   typename dispatch_valid_Predicate,
-            typename cntx_cntr_valid_Predicate>
+        <   typename worker_task_Callable,
+            typename dispatch_valid_Predicate>
         (
             std::weak_ptr<handles_type> handle_ptr,
-            dispatch_valid_Predicate dispatch_pred,
-            cntx_cntr_valid_Predicate cntx_pred
+            worker_task_Callable worker_task,
+            dispatch_valid_Predicate dispatch_pred
         ) {
             if(handle_ptr.expired())
                 return;
@@ -301,32 +325,125 @@ TEST_CASE("dispatch into non-running strand") {
             int counter = 0; /*count of tasks executed by dispatch*/
             callstack<handles_type, int>::context cntx(obj_ptr.get(), counter);
 
-            for(int i = 0; i < num_strand_tasks; ++i)
-                obj_ptr->dispatch(
-                    std::bind(dispatched_task, handle_ptr, cntx_pred));
-
+            // specific task, given to this thread pool worker
+            worker_task(obj_ptr);
+            
             if(!dispatch_pred(counter))
                 failed_dispatch = true;
         };
 
-    // post one task to thread pool, which will be the only runner of strand
-    // so it can freely dispatch into strand and expect them to run within dispatch
-    srvc_ptr->post(pool_task,
-        std::weak_ptr<handles_type>(strand_ptr),
-        /*validity of dispatcher task*/
-        [num_strand_tasks] (int dispatched_tasks)
-        { return dispatched_tasks == num_strand_tasks; },
-        /*validity of dispatched task*/
-        [] (int* cntx_cntr) { return cntx_cntr != nullptr; } );
+    auto strand_empty_task =
+        [] () {};
 
-    std::vector<concurrency::jthread> trs;
-    for(int i = 0; i < num_threads; ++i)
-        trs.push_back(concurrency::jthread(worker_thread, srvc_ptr));
+    auto worker_empty_task =
+        [] (std::weak_ptr<handles_type> handle_ptr) {};
 
-    srvc_ptr->stop();
+    SECTION("into non-running strand") {
+        // post one task to thread pool, which will be the only runner of strand
+        // so it can freely dispatch handlers into strand
+        // and expect them to run within dispatch
 
-    REQUIRE(is_exclusive);
-    REQUIRE(!failed_dispatch);
+        auto worker_task =
+            [dispatched_task, strand_empty_task]
+            (std::shared_ptr<handles_type>& obj_ptr) {
+                std::weak_ptr<handles_type> handle_ptr(obj_ptr);
+
+                for(int i = 0; i < num_strand_tasks; ++i)
+                    obj_ptr->dispatch(
+                        std::bind(dispatched_task, handle_ptr,
+                            strand_empty_task,
+                            /*validity of dispatched task*/
+                            [] (int* cntx_cntr) { return cntx_cntr != nullptr; }));
+            };
+
+        srvc_ptr->post(pool_task,
+            std::weak_ptr<handles_type>(strand_ptr),
+            worker_task,
+            /*validity of dispatcher task*/
+            [num_strand_tasks] (int dispatched_tasks)
+            { return dispatched_tasks == num_strand_tasks; });
+
+        start_threads();
+        stop_and_test();
+    }
+
+    SECTION("into running strand") {
+        // Decription:
+        // Since strand is being runned (by blocking task)
+        // dispatch into this strand will not execute any task
+        using namespace concurrency;
+        mutex manual_block_mt;
+        condition_variable manual_block_cv;
+        bool manual_block = true; // block state
+
+        auto block_until_notice =
+            [&] () {
+                unique_lock<mutex> lk(manual_block_mt);
+                manual_block_cv.wait(lk, [&]() { return !manual_block; });
+            };
+
+        auto worker_blocker =
+            [dispatched_task, block_until_notice] 
+            (std::shared_ptr<handles_type>& obj_ptr) {
+                std::weak_ptr<handles_type> handle_ptr(obj_ptr);
+
+                for(int i = 0; i < num_strand_tasks; ++i)
+                    obj_ptr->dispatch(
+                        std::bind(dispatched_task, handle_ptr,
+                            block_until_notice, /*blocking strand*/
+                            /*this handler will be executed inside dispatch*/
+                            [] (int* cntx_cntr) { return cntx_cntr != nullptr; }));
+            };
+
+
+        // post worker blocker
+        srvc_ptr->post(pool_task,
+            std::weak_ptr<handles_type>(strand_ptr),
+            worker_blocker,
+            /*validity of dispatcher task*/
+            [] (int dispatched_tasks)
+            { return dispatched_tasks >= 1/*strand blocker atleast + dispatched tasks*/; });
+
+        auto unlucky_dispatcher =
+            [dispatched_task, strand_empty_task]
+            (std::shared_ptr<handles_type>& obj_ptr) {
+                std::weak_ptr<handles_type> handle_ptr(obj_ptr);
+
+                for(int i = 0; i < num_strand_tasks; ++i)
+                    obj_ptr->dispatch(
+                        std::bind(dispatched_task, handle_ptr,
+                            strand_empty_task,
+                            /*validity of dispatched task*/
+                            [] (int* cntx_cntr) { return true; /*irrelevant*/ }));
+            };
+
+        // post non-executing dispatchers
+        for(int i = 0; i < num_unlucky_dispatchers; ++i)
+            srvc_ptr->post(pool_task,
+                std::weak_ptr<handles_type>(strand_ptr),
+                unlucky_dispatcher,
+                /*validity of dispatcher task*/
+                [&manual_block_mt, &manual_block, &failed_dispatch]
+                (int dispatched_tasks)
+                { 
+                    lock_guard<mutex> lk(manual_block_mt);
+
+                    // if test is over
+                    if(manual_block == false)
+                        return true;
+ 
+                    return dispatched_tasks == 0/*no handlers executed*/;
+                });
+
+        start_threads();
+        {
+            unique_lock<mutex> lk(manual_block_mt);
+            manual_block = false;
+            manual_block_cv.notify_all();
+        }
+        stop_and_test();
+    }
+
 }
 
 } // namespace io_service
