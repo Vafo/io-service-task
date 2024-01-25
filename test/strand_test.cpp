@@ -254,7 +254,11 @@ TEST_CASE("dispatch into non-running strand") {
     // dispatched into strand
     auto dispatched_task =
         [&strand_mutex, &is_exclusive, &failed_dispatch]
-        (std::weak_ptr<handles_type> handle_ptr) {
+        <typename cntx_cntr_valid_Predicate>
+        (
+            std::weak_ptr<handles_type> handle_ptr,
+            cntx_cntr_valid_Predicate cntx_pred
+        ) {
             if(handle_ptr.expired())
                 return;
 
@@ -269,20 +273,27 @@ TEST_CASE("dispatch into non-running strand") {
             int* counter = 
                 callstack<handles_type, int>::contains(obj_ptr.get());
 
-            // if this task is not called by dispatch
-            if(counter == nullptr) {
+            // if counter (i.e. callstack context) is not as expected
+            if(!cntx_pred(counter)) {
                 failed_dispatch = true;
                 return;
             }
 
             // increment dispatched task done
-            ++(*counter);
+            if(counter)
+                ++(*counter);
         };
 
     // posted to thread pool
     auto pool_task =
         [num_strand_tasks, &failed_dispatch, dispatched_task]
-        (std::weak_ptr<handles_type> handle_ptr) {
+        <   typename dispatch_valid_Predicate,
+            typename cntx_cntr_valid_Predicate>
+        (
+            std::weak_ptr<handles_type> handle_ptr,
+            dispatch_valid_Predicate dispatch_pred,
+            cntx_cntr_valid_Predicate cntx_pred
+        ) {
             if(handle_ptr.expired())
                 return;
             std::shared_ptr<handles_type> obj_ptr(handle_ptr);
@@ -291,15 +302,22 @@ TEST_CASE("dispatch into non-running strand") {
             callstack<handles_type, int>::context cntx(obj_ptr.get(), counter);
 
             for(int i = 0; i < num_strand_tasks; ++i)
-                obj_ptr->dispatch(std::bind(dispatched_task, handle_ptr));
+                obj_ptr->dispatch(
+                    std::bind(dispatched_task, handle_ptr, cntx_pred));
 
-            if(counter != num_strand_tasks)
+            if(!dispatch_pred(counter))
                 failed_dispatch = true;
         };
 
     // post one task to thread pool, which will be the only runner of strand
     // so it can freely dispatch into strand and expect them to run within dispatch
-    srvc_ptr->post(pool_task, std::weak_ptr<handles_type>(strand_ptr));
+    srvc_ptr->post(pool_task,
+        std::weak_ptr<handles_type>(strand_ptr),
+        /*validity of dispatcher task*/
+        [num_strand_tasks] (int dispatched_tasks)
+        { return dispatched_tasks == num_strand_tasks; },
+        /*validity of dispatched task*/
+        [] (int* cntx_cntr) { return cntx_cntr != nullptr; } );
 
     std::vector<concurrency::jthread> trs;
     for(int i = 0; i < num_threads; ++i)
