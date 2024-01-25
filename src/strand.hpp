@@ -24,8 +24,8 @@ private:
     };
 
 private:
-    monitor<strand_data> m_data;
-    Processor& m_proc;
+    monitor<strand_data> m_data; // safe concurrent access 
+    Processor& m_proc; // run() executor
 
 private:
     strand(const strand& other) = delete;
@@ -40,11 +40,13 @@ public:
     template<typename Callable>
     void post(Callable handle) {
         bool trigger = m_data(
-            [&handle] (strand_data& data ) {
+            [&handle]
+            (strand_data& data ) {
                 data.que.push(handle);
                 if(data.is_running)
                     return false;
-                /*strand is now running*/
+
+                /*strand is not running, make it run*/
                 data.is_running = true;
                 return true;
             });
@@ -76,7 +78,8 @@ public:
                     return false;
                 }
 
-                // if it is a worker thread and strand is not runned
+                // if it is a worker thread and strand is not running
+                // start running strand
                 data.is_running = true;
                 return true;
             });
@@ -103,7 +106,9 @@ private:
         func::function<void()> handle;
         while(true) {
             bool trigger = m_data(
-                [&handle] (strand_data& data) {
+                [&handle]
+                (strand_data& data) {
+                    // if there are some handlers to run
                     if(data.que.size()) {
                         handle = std::move(data.que.front());
                         data.que.pop();
@@ -117,6 +122,7 @@ private:
             if(trigger)
                 handle();
             else
+                // no handles to run right now, exit
                 return;
         }
     }

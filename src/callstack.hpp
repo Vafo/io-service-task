@@ -22,7 +22,7 @@ public:
         explicit
         context(Key* key_ptr)
             : m_key(key_ptr)
-            , m_val(reinterpret_cast<Value*>(this))
+            , m_val(reinterpret_cast<Value*>(this)) /*put in [this], so val is not empty*/
             , next(callstack::m_top)
         {
             callstack::m_top = this;
@@ -50,6 +50,7 @@ public:
     }; // class context
 
 private:
+    callstack() = delete; /*static class*/
     callstack(callstack& other) = delete;
     callstack& operator=(callstack& other) = delete;
 
@@ -66,6 +67,7 @@ public:
     }
 
 private:
+    // ptr to last context in stack
     static thread_local context* m_top;
 
 private:

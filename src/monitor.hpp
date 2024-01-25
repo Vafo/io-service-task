@@ -7,7 +7,7 @@
 
 namespace io_service {
 
-// Provides mutual exclusive access to data type T
+// Provides mutually exclusive access to data type T
 template<typename T>
 class monitor {
 private:
@@ -19,12 +19,14 @@ public:
         : m_data()
     {}
 
-    monitor(T data)
-        : m_data(std::move(data))
+    template<typename D> /*D convertible to T*/
+    monitor(D&& data)
+        : m_data(std::forward<D>(data))
     {}
 
     template<typename Callable>
-    std::result_of_t<Callable(T&)> operator()(Callable func) {
+    std::result_of_t<Callable(T&)>
+    operator()(Callable func) {
         using namespace concurrency;
         lock_guard<mutex> lk(mut);
         return func(m_data);
