@@ -131,6 +131,11 @@ public:
 
     void restart();
 
+public:
+    // requirement of strand
+    bool can_dispatch()
+    { return M_is_in_pool(); }
+
 // Impl funcs
 private:
 
