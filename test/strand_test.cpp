@@ -25,11 +25,16 @@ void worker_thread(memory::shared_ptr<io_service> srvc_ptr)
     }
         
 
-// TODO: test_var does not sync across threads
+// Original intent: test_var does not sync across threads
 // it remains [0] value, from time to time (confidently with valgrind)
 // there is a need to let other threads know of updates on this part of memory [test_var]
 // regardless of on which processor/core thread is executing
 TEST_CASE("strand creation", "[!mayfail]") {
+    // Description: Original intent expected
+    // that the strand will be executed continuously, yet it is not guaranteed
+    // At some point, between pool tasks that call to run(), strand may be idle (not running)
+    // and at that very moment, an io_service::stop() could be invoked,
+    // thus not finishing remaining strand tasks
     const int num_threads = 5;
     const int num_tasks = 10;
     const int incr_num = 1000;
@@ -37,7 +42,9 @@ TEST_CASE("strand creation", "[!mayfail]") {
     memory::shared_ptr<io_service> srvc_ptr = 
         memory::make_shared<io_service>();
 
-    std::atomic<int> test_var = 0;
+    int test_var = 0;
+    std::atomic<int> total_increments(0);
+
     strand<io_service> test_strand(*srvc_ptr);
  
     std::vector<concurrency::jthread> trs;
@@ -46,10 +53,12 @@ TEST_CASE("strand creation", "[!mayfail]") {
 
 
     auto incr_var_handle = 
-        [incr_num, &test_var] () {
+        [incr_num, &test_var, &total_increments] () {
             // an attempt to sync test_var among threads
             for(int i = 0; i < incr_num; ++i)
                 ++test_var;
+
+            ++total_increments;
         };
 
     for(int i = 0; i < num_tasks; ++i)
@@ -58,7 +67,7 @@ TEST_CASE("strand creation", "[!mayfail]") {
     srvc_ptr->stop();
 
     // test_var: cache is not updated, reads initial value [0]
-    REQUIRE(test_var == (num_tasks * incr_num));
+    REQUIRE(test_var == (total_increments * incr_num));
 }
 
 template<typename Processor>
