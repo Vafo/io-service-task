@@ -8,8 +8,9 @@
 namespace io_service {
 
 // RAII manager of thread_local resources
+template<typename T>
 class thread_data_mngr {
-    std::unique_ptr<interrupt_handle>& m_int_hndl_ref;
+    std::unique_ptr<T>& m_data_ptr_ref;
 
 private:
     thread_data_mngr() = delete; /*explicit*/
@@ -22,18 +23,15 @@ private:
 
 public:
     thread_data_mngr(
-        std::unique_ptr<interrupt_handle>& int_hndl,
-        std::unique_ptr<interrupt_handle> allocated_handle
+        std::unique_ptr<T>& data_ptr_ref
     )
-        : m_int_hndl_ref(int_hndl)
-    {
-        m_int_hndl_ref = std::move(allocated_handle);   
-    }
+        : m_data_ptr_ref(data_ptr_ref)
+    {}
 
 
     ~thread_data_mngr() {
         // TODO: decide if unique_ptr.reset() is better or not
-        m_int_hndl_ref = std::unique_ptr<interrupt_handle>();
+        m_data_ptr_ref.reset();
     }
 
 }; // class thread_data_mngr

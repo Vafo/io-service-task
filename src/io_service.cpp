@@ -7,7 +7,23 @@
 
 namespace io_service {
 
-thread_local std::unique_ptr<interrupt_handle> local_int_handle_ptr;
+struct thread_data {
+public:
+    interrupt_handle m_int_handle;
+    // proactor_executor m_proactor_exec;
+
+public:
+    thread_data(
+        interrupt_handle&& int_handle
+    )
+        : m_int_handle(std::move(int_handle))
+    {}
+
+}; // struct thread_data
+
+
+thread_local std::unique_ptr<thread_data> local_thread_data;
+
 
 void io_service::run() {
     // Check if it is valid to interact with io_service
@@ -18,12 +34,13 @@ void io_service::run() {
     // If io_service is stopped, handle will be empty
     // thus, won't execute any tasks and return from run()
     // Alternative to throwing exception ^^^^^^^^^^^^^^^^^
-    thread_data_mngr data_mngr(
-        local_int_handle_ptr,
-        std::make_unique<interrupt_handle>(m_manager.make_handle()));
+    local_thread_data = std::make_unique<thread_data>(
+        m_manager.make_handle());
+    // RAII release of pool-related worker data
+    thread_data_mngr data_mngr(local_thread_data);
 
     auto is_stopped =
-        [this] () { return local_int_handle_ptr->is_stopped(); };
+        [this] () { return local_thread_data->m_int_handle.is_stopped(); };
 
     while(!is_stopped()) {
         task_type task;
@@ -73,8 +90,8 @@ bool io_service::M_try_fetch_task(invocable& task) {
 }
 
 bool io_service::M_is_in_pool() {
-    if(local_int_handle_ptr) // TODO: ugly solution
-        return m_manager.owns(*local_int_handle_ptr);
+    if(local_thread_data) // TODO: ugly solution
+        return m_manager.owns(local_thread_data->m_int_handle);
 
     return false;
 }
