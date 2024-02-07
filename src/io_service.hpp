@@ -13,6 +13,8 @@
 #include "threadsafe_queue.hpp"
 #include "false_func.hpp"
 
+#include "async_task.hpp"
+
 namespace io_service {
 
 // Service is stopped
@@ -31,6 +33,8 @@ private:
 
 private:
     threadsafe_queue<task_type> m_global_queue;
+    threadsafe_queue<async_task> m_async_task_queue;
+
     interrupt_flag m_manager;
    
 private:
