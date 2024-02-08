@@ -1,86 +1,89 @@
 #ifndef ASIO_ASYNC_TASK
 #define ASIO_ASYNC_TASK
 
+#include "async_result.hpp"
+
 #include <memory>
+#include <type_traits>
+
 
 namespace io_service {
 
-class async_result;
-
 namespace detail {
 
-// async_init interface
-class async_init_base {
+class async_task_base {
 public:
-    virtual void operator()() = 0;
-    virtual ~async_init_base() {}
-}; // class base_async_init
+    virtual void exec() = 0;
+    virtual ~async_task_base() {}
 
-// async_init concrete obj
-// AsyncOp  async operation
-// callStrat defines how to call async op (e.g. pass required args)
-// ResultT an obj on which async op sets result/failure/done
-template<typename AsyncOp, typename callStrat>
-class async_init_owner
-    : public async_init_base {
+}; // class async_task_base
 
+template<typename AsyncOp, typename ResT>
+class async_task_impl
+    : public async_task_base
+{
 private:
-    AsyncOp m_as_op;
-    callStrat m_strat;
-    
+    AsyncOp m_op;
+    async_result<ResT> m_res;
+
 public:
-    async_init_owner(AsyncOp&& as_op, callStrat&& strat)
-        : m_as_op(std::move(as_op))
-        , m_strat(std::move(strat))
+    async_task_impl(AsyncOp&& op, async_result<ResT>&& res)
+        : m_op(std::forward<AsyncOp>(op))
+        , m_res(std::forward<async_result<ResT>>(res))
     {}
 
 public:
-    void operator()()
-    { m_strat(m_as_op); }
-};
+
+    std::enable_if_t<std::is_invocable_v<AsyncOp, async_result<ResT>>>
+    exec()
+    { m_op(std::move(m_res)); /*transfer ownership to async op*/ }
+
+}; // class async_task_impl
 
 } // namespace detail
 
 
-// type erasure of async op initiator
-class async_init {
+class async_task {
 private:
-    std::unique_ptr<detail::async_init_base> m_base_ptr;
+    std::unique_ptr<detail::async_task_base> m_ptr;
+
+private:
+    async_task(const async_task& other) = delete;
+    async_task& operator=(const async_task& other) = delete;
 
 public:
-    async_init()
-        : m_base_ptr()
+    async_task() {}
+
+    template<typename AsyncOp, typename ResT>
+    async_task(AsyncOp&& op, async_result<ResT>&& res)
+        : m_ptr(
+            std::make_unique<detail::async_task_impl<AsyncOp, ResT>>(
+                std::forward<AsyncOp>(op),
+                std::forward<async_result<ResT>>(res)))
     {}
 
-    template<typename AsyncOp, typename callStrat>
-    async_init(AsyncOp&& as_op, callStrat&& strat)
-        : m_base_ptr(
-            std::make_unique<detail::async_init_owner>(
-                std::forward<AsyncOp>(as_op),
-                std::forward<callStrat>(strat)))
+    async_task(async_task&& other)
+        : m_ptr( std::move(other.m_ptr) )
     {}
+
+    async_task& operator=(async_task&& other) {
+        async_task(std::move(other)).swap(*this);
+        return *this;
+    }
 
 public:
     void operator()() {
-        if(m_base_ptr)
-            m_base_ptr->operator()();
+        if(m_ptr)
+            m_ptr->exec();
     }
 
-}; // class async_init
+public:
+    void swap(async_task& other) {
+        using std::swap;
+        swap(m_ptr, other.m_ptr);
+    }
 
-// type erasure of async op completor
-class async_compl {
-
-};
-
-class async_task {
-    async_init m_init;
-    async_compl m_compl;
 }; // class async_task
-
-class async_result {
-    async_compl m_compl;
-}; // class async_result
 
 } // namespace io_service
 

@@ -45,9 +45,9 @@ void io_service::run() {
     while(!is_stopped()) {
         task_type task;
         if(!M_wait_and_pop_task(task, is_stopped))
-            break; /*could not fetch task. Was interrupted by predicate*/
+            break;
 
-        /*execute task*/
+        /*got task, execute it*/
         task();
     }
 
