@@ -177,7 +177,10 @@ private:
     void M_check_validity() noexcept(false);
     void M_clear_tasks();
 
-    uring& M_get_uring();
+    // uring related
+    uring& M_uring_get_local_ring();
+    int M_uring_push_result(async_result<int>&& res);
+    void M_uring_check_completion();
 
 // async related
 private:
@@ -205,27 +208,55 @@ private:
         CompHandler&& handler
     ) {
         do_post_async<int>(
-            get_uring_async_op(std::forward<AsyncOp>(as_op)),
-            std::forward<CompHandler>(handler));
+            get_uring_async_op(
+                std::forward<AsyncOp>(as_op)),
+            get_generic_async_comp<int>( /*will be dispatched*/
+                get_uring_async_comp(
+                    std::forward<CompHandler>(handler))));
     }
 
     template<typename ResT,
         typename AsyncOp, typename CompHandler>
     void post_generic_async(AsyncOp&& as_op, CompHandler&& comp) {
         do_post_async<ResT>(
-            get_generic_async_op<ResT>(std::forward<AsyncOp>(as_op)),
-            get_generic_async_comp<ResT>(std::forward<CompHandler>(comp)));
+            get_generic_async_op<ResT>(
+                std::forward<AsyncOp>(as_op)),
+            get_generic_async_comp<ResT>(
+                std::forward<CompHandler>(comp)));
     }
 
 private:
-    template<typename AsyncOp>
+    template<typename AsyncOp,
+        typename std::enable_if_t<
+            std::is_invocable_v<AsyncOp, uring_sqe>, int> = 0>
     auto get_uring_async_op(AsyncOp&& op) {
         return
         [this, m_op(std::forward<AsyncOp>(op))]
         (async_result<int>&& res) {
-            // TODO: add checking of uring CQ
-            uring& ring = M_get_uring();
-            m_op(ring);
+            uring& ring = M_uring_get_local_ring();
+            uring_sqe sqe = ring.get_sqe();
+            m_op(sqe);
+             
+            // add async_result entry to thread_local list
+            int id = 
+                M_uring_push_result(
+                    std::forward<async_result<int>>(res));
+        
+            // set id of uring completion
+            sqe.set_data(id);
+            ring.submit();
+        };
+    }
+
+    template<typename CompHandler,
+        typename std::enable_if_t<
+            std::is_invocable_v<CompHandler, int>, int> = 0>
+    auto get_uring_async_comp(CompHandler&& comp) {
+        return
+        [this, m_comp(std::forward<CompHandler>(comp))]
+        (async_result<int>&& res) {
+            int val = res.get_result();
+            m_comp(val);
         };
     }
 
