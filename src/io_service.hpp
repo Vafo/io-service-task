@@ -3,8 +3,8 @@
 
 #include "helgrind_annotations.hpp"
 
-#include <iostream>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 
 #include <future>
@@ -65,10 +65,10 @@ public:
 
 public:
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(Args...)>,
-        typename Signature = return_type(Args...)>
+        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename Signature = return_type(std::decay_t<Args>...)>
     std::future<return_type>
-    post_waitable(Callable&& func, Args ...args) {
+    post_waitable(Callable&& func, Args&& ...args) {
         // Check validity of io_service state before proceeding 
         M_check_validity();
 
@@ -77,16 +77,16 @@ public:
         // obtain future of task
         std::future<return_type> fut(new_task.get_future());
 
-        M_post_task(std::move(new_task), args...);
+        M_post_task(std::move(new_task), std::forward<Args>(args)...);
 
         return fut;
     }
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(Args...)>,
-        typename Signature = return_type(Args...)>
+        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename Signature = return_type(std::decay_t<Args>...)>
     std::future<return_type>
-    dispatch_waitable(Callable&& func, Args ...args) {
+    dispatch_waitable(Callable&& func, Args&& ...args) {
         std::future<return_type> fut_res;
 
         if( M_is_in_pool() ) {
@@ -96,10 +96,10 @@ public:
                 std::forward<Callable>(func));
             fut_res = task.get_future();
             // No need to create task_type, invoke packaged_task directly
-            task(args...);
+            task(std::forward<Args>(args)...);
         } else {
             fut_res = post_waitable(
-                std::forward<Callable>(func), args...);
+                std::forward<Callable>(func), std::forward<Args>(args)...);
         }
 
         return fut_res;
@@ -109,32 +109,32 @@ public:
     // Post/Dispatch tasks without future
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(Args...)>,
-        typename Signature = return_type(Args...)>
+        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename Signature = return_type(std::decay_t<Args>...)>
     void
-    post(Callable&& func, Args ...args) {
+    post(Callable&& func, Args&& ...args) {
         // Check validity of io_service state before proceeding 
         M_check_validity();
 
         std::packaged_task<Signature> new_task(
             std::forward<Callable>(func));
 
-        M_post_task(std::move(new_task), args...);
+        M_post_task(std::move(new_task), std::forward<Args>(args)...);
     }
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(Args...)>,
-        typename Signature = return_type(Args...)>
+        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename Signature = return_type(std::decay_t<Args>...)>
     void
-    dispatch(Callable&& func, Args ...args) {
+    dispatch(Callable&& func, Args&& ...args) {
         if( M_is_in_pool() ) {
             /*if this_thread is among m_thread_pool, execute input task immediately*/
             std::packaged_task<Signature> task(
                 std::forward<Callable>(func));
             // No need to create task_type, invoke packaged_task directly
-            task(args...);
+            task(std::forward<Args>(args)...);
         } else {
-            post(std::forward<Callable>(func), args...);
+            post(std::forward<Callable>(func), std::forward<Args>(args)...);
         }
     }
 
@@ -152,11 +152,11 @@ public:
 private:
 
     template<typename SignatureT, typename ...Args>
-    void M_post_task(std::packaged_task<SignatureT>&& pack_task, Args... args) {
+    void M_post_task(std::packaged_task<SignatureT>&& pack_task, Args&&... args) {
         invocable new_task(
             std::forward<
                 std::packaged_task<SignatureT>>(pack_task),
-            args...);
+            std::forward<Args>(args)...);
 
         // TODO: in order to reduce std::move, make argument rval ref?
         // push to global
@@ -177,22 +177,26 @@ private:
     void M_check_validity() noexcept(false);
     void M_clear_tasks();
 
+    uring& M_get_uring();
+
 // async related
 private:
 
     template<
-        typename AsyncOp, typename CompHandler,
-        typename ResT>
+        typename ResT,
+        typename AsyncOp, typename CompHandler>
     void do_post_async(AsyncOp&& op, CompHandler&& comp)
     {
         async_result<ResT> as_res(
             std::forward<CompHandler>(comp));
 
         async_task task(
-                std::forward<AsyncOp>(op),
-                std::move(as_res));
+            std::forward<AsyncOp>(op),
+            std::move(as_res));
 
-        dispatch(task);
+        // Push to global work queue
+        // TODO: consider assigning a priority to async tasks
+        dispatch(std::move(task));
     }
 
     template<typename AsyncOp, typename CompHandler>
@@ -200,9 +204,17 @@ private:
         AsyncOp&& as_op,
         CompHandler&& handler
     ) {
-        do_post_async(
+        do_post_async<int>(
             get_uring_async_op(std::forward<AsyncOp>(as_op)),
             std::forward<CompHandler>(handler));
+    }
+
+    template<typename ResT,
+        typename AsyncOp, typename CompHandler>
+    void post_generic_async(AsyncOp&& as_op, CompHandler&& comp) {
+        do_post_async<ResT>(
+            get_generic_async_op<ResT>(std::forward<AsyncOp>(as_op)),
+            get_generic_async_comp<ResT>(std::forward<CompHandler>(comp)));
     }
 
 private:
@@ -212,16 +224,19 @@ private:
         [this, m_op(std::forward<AsyncOp>(op))]
         (async_result<int>&& res) {
             // TODO: add checking of uring CQ
-            uring& ring = get_uring();
+            uring& ring = M_get_uring();
             m_op(ring);
         };
     }
 
-    template<typename AsyncOp>
-    auto get_generic_async_op() {
+    template<typename ResT, typename AsyncOp>
+    auto get_generic_async_op(AsyncOp&& op) {
         return
-        [this] (AsyncOp&& op) {
-            dispatch(std::forward<AsyncOp>(op));
+        [this, m_op(std::forward<AsyncOp>(op))]
+        (async_result<ResT>&& res) {
+            dispatch(
+                std::move(m_op),
+                std::forward<async_result<ResT>>(res));
         };
     }
 
@@ -229,18 +244,16 @@ private:
     auto get_generic_async_comp(CompHandler&& comp) {
         return
         [this, m_comp(std::forward<CompHandler>(comp))]
-        (ResT& res) {
-            dispatch(m_comp, res);
+        (async_result<ResT>&& res) {
+            dispatch(
+                std::move(m_comp),
+                std::forward<async_result<ResT>>(res));
         };
     }
 
 private:
-    uring& get_uring();
-
-private:
-    template<typename UringInit, typename ComplHandler>
-    friend void uring_async_poster();
-    friend void inline_async_poster();
+    friend class uring_async_poster;
+    friend class generic_async_poster;
 
 }; // class io_service
 
