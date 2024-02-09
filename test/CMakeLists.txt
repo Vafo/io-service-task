@@ -25,12 +25,12 @@ target_link_libraries(io_service_test_suite
 
 if(NOT INCLUDE_MODULES_TESTS)
     add_executable(io_service_test
-        $<TARGET_OBJECTS:io_service_test_suite>
-        $<TARGET_OBJECTS:io_service_async_test_suite>)
+        $<TARGET_OBJECTS:io_service_async_test_suite>
+        $<TARGET_OBJECTS:io_service_test_suite>)
 else()
     add_executable(io_service_test 
-        $<TARGET_OBJECTS:io_service_test_suite>
         $<TARGET_OBJECTS:io_service_async_test_suite>
+        $<TARGET_OBJECTS:io_service_test_suite>
 
         $<TARGET_OBJECTS:concurrency_test_suite>
         $<TARGET_OBJECTS:shared_ptr_test_suite>
@@ -41,7 +41,10 @@ endif()
 
 
 # Catch2
-target_link_libraries(io_service_test io_service_test_suite Catch2::Catch2WithMain)
+target_link_libraries(io_service_test
+    io_service_async_test_suite
+    io_service_test_suite
+    Catch2::Catch2WithMain)
 
 # Output to build dir
 set_target_properties(io_service_test 
