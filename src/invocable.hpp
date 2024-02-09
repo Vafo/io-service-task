@@ -6,6 +6,7 @@
 #include <future>
 #include <memory>
 #include <tuple>
+#include <type_traits>
 
 namespace io_service {
 
@@ -31,12 +32,12 @@ private:
 
 public:
     invocable_impl(task_type&& task, TupleT&& args)
-        : m_task(std::move(task))
-        , m_args(std::move(args))
+        : m_task(std::forward<task_type>(task))
+        , m_args(std::forward<TupleT>(args))
     {}
     
     void call() {
-        std::apply(m_task, m_args);
+        std::apply(std::move(m_task), std::move(m_args));
     }
 
 }; // struct invocable_impl
@@ -71,12 +72,13 @@ public:
     template<typename SignatureT, typename ...Args>
     invocable(
         std::packaged_task<SignatureT>&& task,
-        Args... args
+        Args&&... args
     )
         : m_inv_ptr( 
             std::make_unique<
-                invocable_impl<SignatureT, std::tuple<Args...>>>(
-                    std::move(task), std::make_tuple(args...)))
+                invocable_impl<SignatureT, std::tuple<std::decay_t<Args>...>>>(
+                    std::forward<std::packaged_task<SignatureT>>(task),
+                    std::make_tuple(std::forward<Args>(args)...)))
     {}
 
 public:
