@@ -1,11 +1,14 @@
 #ifndef ASIO_URING_ASYNC_HPP
 #define ASIO_URING_ASYNC_HPP
 
+#include "io_service.hpp"
+
 #include "uring.hpp"
 #include "async_task.hpp"
 #include "buffer.hpp"
 
 #include <liburing.h>
+#include <utility>
 
 namespace io_service {
 
@@ -110,6 +113,26 @@ public:
     }
 
 }; // class async_accept_init
+ 
+// TODO: Check for refactoring
+class uring_async_poster {
+private:
+    io_service& m_serv;
+
+public:
+    uring_async_poster(io_service& serv)
+        : m_serv(serv)
+    {} 
+
+public:
+    template<typename AsyncOp, typename CompHandler>
+    void post(AsyncOp&& op, CompHandler&& comp) {
+        m_serv.post_uring_async(
+            std::forward<AsyncOp>(op),
+            std::forward<CompHandler>(comp));
+    }
+
+}; // class uring_async_poster
 
 } // namespace io_service
 
