@@ -34,8 +34,9 @@ TEST_CASE("make_invocable") {
         std::packaged_task<int(int,int)> task(func);
         std::future<int> fut = task.get_future();
         invocable inv(std::move(task), var1, var2);
-        
-        std::jthread tr(std::move(inv));
+        {
+            std::jthread tr(std::move(inv));
+        }
         fut.wait();
         REQUIRE(fut.get() == answer);
     }
@@ -46,7 +47,10 @@ TEST_CASE("make_invocable") {
         invocable inv;
         inv = invocable(std::move(task), var1, var2);
 
-        std::jthread tr(std::move(inv));
+        {
+            std::jthread tr(std::move(inv));
+        }        
+
         fut.wait();
         REQUIRE(fut.get() == answer);
     }

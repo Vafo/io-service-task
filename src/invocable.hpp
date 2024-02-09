@@ -17,27 +17,33 @@ struct invocable_int {
 }; // struct invocable_int
 
 
-template<typename SignatureT, typename TupleT>
+template<typename SignatureT, typename ...TupleTs>
 struct invocable_impl: public invocable_int {
 public:
     typedef std::packaged_task<SignatureT> task_type;
 
 private:
     task_type m_task;
-    TupleT m_args;
+    std::tuple<TupleTs...> m_args;
 
 private:
     invocable_impl(const invocable_impl& other) = delete;
     invocable_impl& operator=(const invocable_impl& other) = delete;
 
 public:
-    invocable_impl(task_type&& task, TupleT&& args)
+    template<typename ...DirtyTs,
+        typename std::enable_if_t<
+            std::is_same_v<
+                std::tuple<TupleTs...>,
+                std::tuple<std::decay_t<DirtyTs>...>>, int> = 0>
+    invocable_impl(task_type&& task, DirtyTs&&... args)
         : m_task(std::forward<task_type>(task))
-        , m_args(std::forward<TupleT>(args))
+        , m_args( 
+            std::make_tuple(std::forward<DirtyTs>(args)...))
     {}
     
     void call() {
-        std::apply(std::move(m_task), std::move(m_args));
+        std::apply(m_task, std::move(m_args));
     }
 
 }; // struct invocable_impl
@@ -76,9 +82,9 @@ public:
     )
         : m_inv_ptr( 
             std::make_unique<
-                invocable_impl<SignatureT, std::tuple<std::decay_t<Args>...>>>(
+                invocable_impl<SignatureT, std::decay_t<Args>...>>(
                     std::forward<std::packaged_task<SignatureT>>(task),
-                    std::make_tuple(std::forward<Args>(args)...)))
+                    std::forward<Args>(args)...))
     {}
 
 public:
