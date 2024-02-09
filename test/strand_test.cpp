@@ -1,5 +1,7 @@
 #include <catch2/catch_all.hpp>
 
+#include <iostream>
+
 #include <memory>
 #include <stdexcept>
 #include <thread>

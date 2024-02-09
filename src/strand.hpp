@@ -52,7 +52,8 @@ public:
             });
 
         if(trigger) /*check if there is need to push run() to processor*/
-            m_proc.post(std::bind(&strand::run, this));
+            m_proc.post(
+                std::bind(&strand::run, this));
     }
 
     template<typename Callable>
