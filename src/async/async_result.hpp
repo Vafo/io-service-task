@@ -98,16 +98,18 @@ private:
     async_result& operator=(const async_result& other) = delete;
 
 public:
-    template<typename CompHandler>
+    async_result(async_result&& other)
+        : m_base_ptr( std::move(other.m_base_ptr) )
+    {}
+
+    template<typename CompHandler,
+        typename std::enable_if_t<
+        !std::is_same_v<async_result, CompHandler>, int> = 0>
     explicit
     async_result(CompHandler&& handler)
         : m_base_ptr(
             std::make_unique<async_result_comp<T, CompHandler>>(
                 std::forward<CompHandler>(handler)))
-    {}
-
-    async_result(async_result&& other)
-        : m_base_ptr( std::move(other.m_base_ptr) )
     {}
 
 public:

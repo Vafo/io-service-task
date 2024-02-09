@@ -54,6 +54,8 @@ TEST_CASE("generic async io_service") {
     serv.stop();
 }
 
+// TODO: bad test.
+// Cant test if none of async ops ever executed
 TEST_CASE("generic async io_service executing") {
     const int num_threads = 10;
     const int num_async_tasks = 100;
