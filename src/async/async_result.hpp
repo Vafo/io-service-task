@@ -98,6 +98,8 @@ private:
     async_result& operator=(const async_result& other) = delete;
 
 public:
+    async_result() {}
+
     async_result(async_result&& other)
         : m_base_ptr( std::move(other.m_base_ptr) )
     {}
@@ -119,13 +121,25 @@ public:
     template<typename D>
     std::enable_if_t<std::is_same_v<T,std::decay_t<D>>>
     set_result(D&& res) {
+        M_check_validity();
         m_base_ptr->set_val(std::forward<D>(res));
         // TODO: find out if it is okay to std::move(*this)
         m_base_ptr->execute_comp_handler(std::move(*this));
     }
 
     T& get_result() {
+        M_check_validity();
         return m_base_ptr->get_val();
+    }
+
+public:
+    operator bool()
+    { return static_cast<bool>(m_base_ptr); }
+
+private:
+    void M_check_validity() {
+        if(!m_base_ptr)
+            throw std::runtime_error("async_result is empty");
     }
 
 }; // class async_result
