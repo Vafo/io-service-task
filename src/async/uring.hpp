@@ -1,14 +1,20 @@
 #ifndef ASIO_URING_HPP
 #define ASIO_URING_HPP
 
+#include <algorithm>
+#include <iostream>
+
 #include <cassert>
 #include <cerrno>
 #include <cstring>
 #include <liburing.h>
 #include <liburing/io_uring.h>
+#include <list>
 #include <stdexcept>
 
 #include "cerror_code.hpp"
+#include "mutex.hpp"
+#include "unique_lock.hpp"
 
 #define ASIO_URING_ENTRIES 4
 
@@ -90,13 +96,6 @@ public:
         , m_cqe_ptr()
     {}
 
-// Used by uring
-private:
-    uring_cqe(io_uring& owner, io_uring_cqe* cqe_ptr)
-        : m_ring_owner(&owner)
-        , m_cqe_ptr(cqe_ptr)
-    {}
-
     uring_cqe(uring_cqe&& other)
         : m_ring_owner(std::move(other.m_ring_owner))
         , m_cqe_ptr(std::move(other.m_cqe_ptr))
@@ -107,9 +106,16 @@ private:
         return *this;
     }
 
+// Used by uring
+private:
+    uring_cqe(io_uring& owner, io_uring_cqe* cqe_ptr)
+        : m_ring_owner(&owner)
+        , m_cqe_ptr(cqe_ptr)
+    {}
+
 public:
     ~uring_cqe() {
-        if(*this) // if valid
+        if(operator bool())
             io_uring_cqe_seen(m_ring_owner, m_cqe_ptr);
     }
 
@@ -122,6 +128,11 @@ public:
     uint64_t get_data() const {
         M_check_validity();
         return io_uring_cqe_get_data64(m_cqe_ptr);
+    }
+
+    uint32_t get_flags() const {
+        M_check_validity();
+        return m_cqe_ptr->flags;
     }
 
     operator bool()
@@ -145,34 +156,56 @@ private:
 
 }; // class uring_cqe
 
+
+struct uring_shared_wq_t {};
+constexpr uring_shared_wq_t uring_shared_wq;
+
 // io_uring wrapper
 class uring {
 private:
+    static std::list<int> s_rings;
+    static concurrency::mutex s_rings_mut;
+
+private:
     io_uring m_ring;    
-/*
-    int pending_async_ops_cnt;
-*/
+
 public:
-    uring() {
-        uring_error err;
-        err = io_uring_queue_init(ASIO_URING_ENTRIES, &m_ring, 0);
+    uring()
+    { m_setup_solo_ring(); }
 
-        // if could not create io_uring
-        if(err)
-            err.throw_exception();
-    }
+    uring(uring_shared_wq_t) {
+        using namespace concurrency;
+        unique_lock<mutex> lk(s_rings_mut);
+        
+        if(s_rings.empty()) {
+            // create a ring and insert fd into list
+            m_setup_solo_ring();
+            s_rings.push_back(m_ring.ring_fd);
+            return;
+        }
 
-    uring(const uring& other) {
+        int existing_fd = *s_rings.begin();
+        std::cout << "creatin" << std::endl;
         uring_error err;
         io_uring_params params = {
             .flags = IORING_SETUP_ATTACH_WQ,
-            .wq_fd = static_cast<__u32>(other.m_ring.ring_fd) 
+            .wq_fd = static_cast<__u32>(existing_fd) 
         };
         err = io_uring_queue_init_params(ASIO_URING_ENTRIES, &m_ring, &params);
 
         // if could not create io_uring
         if(err)
             err.throw_exception();
+    }
+
+    ~uring() {
+        using namespace concurrency;
+        unique_lock<mutex> lk(s_rings_mut);
+
+        int fd = m_ring.ring_fd;
+        io_uring_queue_exit(&m_ring);
+
+        s_rings.remove(fd);
     }
 
 public:
@@ -189,7 +222,9 @@ public:
     bool try_get_cqe(uring_cqe& cqe) {
         uring_error err;
         io_uring_cqe* cqe_ptr = NULL;
-        err = io_uring_peek_cqe(&m_ring, &cqe_ptr);
+        int val = 
+            io_uring_peek_cqe(&m_ring, &cqe_ptr);
+        err = val;
 
         if(err) {
             if (err.value() == -EAGAIN) {
@@ -199,36 +234,26 @@ public:
             }
         }
         
+        std::cout << "VAL " << val << " RES " << cqe_ptr->res << std::endl;
         assert(cqe_ptr != NULL && "cqe_ptr is null");
         cqe = uring_cqe(m_ring, cqe_ptr);
         return true;
     }
 
 public:
-    // check if io_uring has space for another task
-    bool space_available() {
-        return true;
-    }
-
-    // check if there is some unfinished task to be completed
-    bool completion_pending() {
-        return true;
-    }
-
     void submit() {
         io_uring_submit(&m_ring);
     }
 
-    // non-block checks if some async op completed,
-    // then return its completion handler
-    bool peek_completed_task() {
-        return true;
-    }
+private:
+    void m_setup_solo_ring() {
+        uring_error err;
+        err = io_uring_queue_init(ASIO_URING_ENTRIES, &m_ring, 0);
 
-    // blocks until completion event, and returns completion handler
-    void wait_completed_task() {
+        // if could not create io_uring
+        if(err)
+            err.throw_exception();
     }
-
 
 }; // class uring
 

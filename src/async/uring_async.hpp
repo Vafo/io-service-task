@@ -8,9 +8,14 @@
 #include "buffer.hpp"
 
 #include <liburing.h>
+#include <type_traits>
 #include <utility>
 
 namespace io_service {
+
+typedef int uring_error_code;
+
+namespace detail {
 
 class base_async_io_init {
 protected:
@@ -41,16 +46,12 @@ public:
     {}
 
 public:
-    void operator()(uring& ring) {
-        uring_sqe sqe = ring.get_sqe();
-
+    void operator()(uring_sqe& sqe) {
         io_uring_prep_read(
             sqe.get(),
             m_fd,
             m_buf.m_mem_ptr, m_buf.m_size,
             m_offset);
-
-        ring.submit(); 
     }
 
 }; // class async_read_init
@@ -64,56 +65,42 @@ public:
     {}
 
 public:
-    void operator()(uring& ring) {
-        uring_sqe sqe = ring.get_sqe();
-
+    void operator()(uring_sqe& sqe) {
         io_uring_prep_write(
             sqe.get(),
             m_fd,
             m_buf.m_mem_ptr, m_buf.m_size,
             m_offset);
-
-        ring.submit();
     }
 
 }; // class async_write_init
 
-template<typename CompletionHandler>
+template<typename CompHandler,
+    typename std::enable_if_t<
+        std::is_invocable_v<CompHandler, uring_error_code, int>, int> = 0>
 class base_io_completer {
+private:
+    CompHandler m_comp;
 
+public:
+    base_io_completer(CompHandler&& comp)
+        : m_comp(std::forward<CompHandler>(comp))
+    {}
+
+public:
     void operator()(int cqe_res) {
+        uring_error_code err = 0;
+        if(cqe_res < 0) {
+            err = -cqe_res;
+        }
+        m_comp(err, cqe_res);
     }
 
 }; // class base_io_completer
 
-class async_accept_init {
-private:
-    int m_fd;
-    // endpoint_info& m_peer;
-
-public:
-    async_accept_init(
-        int fd /*, endpoint_info& peer*/
-    )
-        : m_fd(fd)
-    {}
-
-public:
-    void operator()(uring& ring) {
-        uring_sqe sqe = ring.get_sqe();
-
-        io_uring_prep_accept(
-            sqe.get(),
-            m_fd,
-            /*&m_peer.addr*/,
-            /*&m_peer.addrlen*/,
-            0);
-
-        ring.submit();
-    }
-
-}; // class async_accept_init
  
+}  // namespace detail
+
 // TODO: Check for refactoring
 class uring_async_poster {
 private:
