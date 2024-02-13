@@ -6,6 +6,8 @@ add_library(io_service_async_test_suite OBJECT
 
 target_link_libraries(io_service_async_test_suite
     io_service_async_impl
-    io_service_impl
+
+    Catch2::Catch2
+
     io_service_compiler_flags)
 

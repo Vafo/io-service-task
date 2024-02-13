@@ -24,11 +24,11 @@ target_link_libraries(io_service_test_suite
     io_service_compiler_flags)
 
 if(NOT INCLUDE_MODULES_TESTS)
-    add_executable(io_service_test
+    add_executable(io_service_unit_test
         $<TARGET_OBJECTS:io_service_async_test_suite>
         $<TARGET_OBJECTS:io_service_test_suite>)
 else()
-    add_executable(io_service_test 
+    add_executable(io_service_unit_test 
         $<TARGET_OBJECTS:io_service_async_test_suite>
         $<TARGET_OBJECTS:io_service_test_suite>
 
@@ -41,12 +41,12 @@ endif()
 
 
 # Catch2
-target_link_libraries(io_service_test
+target_link_libraries(io_service_unit_test
     io_service_async_test_suite
     io_service_test_suite
     Catch2::Catch2WithMain)
 
 # Output to build dir
-set_target_properties(io_service_test 
+set_target_properties(io_service_unit_test 
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
