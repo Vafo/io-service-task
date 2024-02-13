@@ -4,6 +4,7 @@
 #include "thread_data_mngr.hpp"
 
 #include "async_result.hpp"
+#include "uring.hpp"
 
 #include <iostream>
 #include <liburing/io_uring.h>
@@ -62,13 +63,10 @@ public:
 
 public:
     thread_data(
-        interrupt_handle&& int_handle,
-        uring&& ring,
-        std::list<uring_res_ent>&& res_entrs
+        interrupt_handle&& int_handle
     )
         : m_int_handle(std::forward<interrupt_handle>(int_handle))
-        , m_ring(std::forward<uring>(ring))
-        , m_uring_res_entrs(std::forward<std::list<uring_res_ent>>(res_entrs))
+        , m_ring(uring_shared_wq)
     {}
 
 }; // struct thread_data
@@ -87,9 +85,7 @@ void io_service::run() {
     // thus, won't execute any tasks and return from run()
     // Alternative to throwing exception ^^^^^^^^^^^^^^^^^
     local_thread_data = std::make_unique<thread_data>(
-        m_manager.make_handle(),
-        uring(),
-        std::list<uring_res_ent>()); // looks ugly
+        m_manager.make_handle()); // looks ugly
 
     // RAII release of pool-related worker data
     thread_data_mngr data_mngr(local_thread_data);

@@ -169,6 +169,13 @@ private:
 private:
     io_uring m_ring;    
 
+private:
+    uring(const uring& other) = delete;
+    uring& operator=(const uring& other) = delete;
+
+    uring(uring&& other) = delete;
+    uring& operator=(uring&& other) = delete;
+
 public:
     uring()
     { m_setup_solo_ring(); }
