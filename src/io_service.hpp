@@ -3,8 +3,10 @@
 
 #include "helgrind_annotations.hpp"
 
+#include <iostream>
+
 #include <stdexcept>
-#include <tuple>
+#include <thread>
 #include <type_traits>
 
 #include <future>
@@ -65,7 +67,8 @@ public:
 
 public:
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename return_type =
+            std::result_of_t<std::decay_t<Callable>(std::decay_t<Args>...)>,
         typename Signature = return_type(std::decay_t<Args>...)>
     std::future<return_type>
     post_waitable(Callable&& func, Args&& ...args) {
@@ -83,7 +86,8 @@ public:
     }
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename return_type =
+            std::result_of_t<std::decay_t<Callable>(std::decay_t<Args>...)>,
         typename Signature = return_type(std::decay_t<Args>...)>
     std::future<return_type>
     dispatch_waitable(Callable&& func, Args&& ...args) {
@@ -109,7 +113,8 @@ public:
     // Post/Dispatch tasks without future
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename return_type =
+            std::result_of_t<std::decay_t<Callable>(std::decay_t<Args>...)>,
         typename Signature = return_type(std::decay_t<Args>...)>
     void
     post(Callable&& func, Args&& ...args) {
@@ -123,7 +128,8 @@ public:
     }
 
     template<typename Callable, typename ...Args,
-        typename return_type = std::result_of_t<Callable(std::decay_t<Args>...)>,
+        typename return_type =
+            std::result_of_t<std::decay_t<Callable>(std::decay_t<Args>...)>,
         typename Signature = return_type(std::decay_t<Args>...)>
     void
     dispatch(Callable&& func, Args&& ...args) {
@@ -228,11 +234,11 @@ private:
 private:
     template<typename AsyncOp,
         typename std::enable_if_t<
-            std::is_invocable_v<AsyncOp, uring_sqe>, int> = 0>
+            std::is_invocable_v<AsyncOp, uring_sqe&>, int> = 0>
     auto get_uring_async_op(AsyncOp&& op) {
         return
-        [this, m_op(std::forward<AsyncOp>(op))]
-        (async_result<int>&& res) {
+        [this, m_op(std::forward<AsyncOp>(op)) /*move into lambda*/]
+        (async_result<int>&& res) mutable {
             uring& ring = M_uring_get_local_ring();
             uring_sqe sqe = ring.get_sqe();
             m_op(sqe);
@@ -242,9 +248,11 @@ private:
                 M_uring_push_result(
                     std::forward<async_result<int>>(res));
         
+            std::cout << "Got task " << id << " "  << std::this_thread::get_id() << std::endl;
             // set id of uring completion
             sqe.set_data(id);
             ring.submit();
+            std::cout << "SUBMIT" << std::endl;
         };
     }
 
@@ -254,7 +262,7 @@ private:
     auto get_uring_async_comp(CompHandler&& comp) {
         return
         [this, m_comp(std::forward<CompHandler>(comp))]
-        (async_result<int>&& res) {
+        (async_result<int>&& res) mutable {
             int val = res.get_result();
             m_comp(val);
         };
