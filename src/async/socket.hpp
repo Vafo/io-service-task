@@ -11,24 +11,31 @@ namespace ip {
 
 class socket {
 private:
+    const int invalid_fd = -1;
+private:
     io_service& m_serv;
     int m_fd;
 
-public:
-    socket(io_service& serv)
-        : m_serv(serv)
-        , m_fd(-1)
-    {}
-
 private:
+    // used by async_accept_comp
     socket(io_service& serv, int fd)
         : m_serv(serv)
         , m_fd(fd)
     {}
 
 public:
+    // empty socket
+    socket(io_service& serv)
+        : m_serv(serv)
+        , m_fd(invalid_fd)
+    {}
+
+public:
     ~socket()
-    { close(m_fd); }
+    { 
+        if(m_fd != invalid_fd)
+            close(m_fd);
+    }
 
 private:
     template<typename CompHandler>

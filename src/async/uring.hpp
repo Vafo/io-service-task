@@ -2,7 +2,6 @@
 #define ASIO_URING_HPP
 
 #include <algorithm>
-#include <iostream>
 
 #include <cassert>
 #include <cerrno>
@@ -104,10 +103,8 @@ public:
     {}
 
     uring_cqe(uring_cqe&& other)
-        : uring_cqe()
-    {
-        swap(other); // TODO: find out if it is a proper move cstr
-    }
+        : uring_cqe() // fill with nulls
+    { swap(other); } // TODO: find out if it is a proper move cstr
 
     uring_cqe& operator=(uring_cqe&& other) {
         uring_cqe(std::move(other)).swap(*this);

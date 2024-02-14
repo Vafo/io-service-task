@@ -3,10 +3,7 @@
 
 #include "helgrind_annotations.hpp"
 
-#include <iostream>
-
 #include <stdexcept>
-#include <thread>
 #include <type_traits>
 
 #include <future>

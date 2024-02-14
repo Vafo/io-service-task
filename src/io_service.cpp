@@ -5,7 +5,6 @@
 #include "async_result.hpp"
 #include "uring.hpp"
 
-#include <iostream>
 #include <liburing/io_uring.h>
 #include <memory> // std::unique_ptr
 #include <stdexcept>
