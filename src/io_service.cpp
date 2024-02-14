@@ -1,6 +1,5 @@
 #include "io_service.hpp"
 #include "interrupt_flag.hpp"
-#include "mutex.hpp"
 #include "thread_data_mngr.hpp"
 
 #include "async_result.hpp"
@@ -179,12 +178,9 @@ void io_service::M_uring_check_completion() {
     if(!M_uring_get_local_ring().try_get_cqe(cqe))
         return;    
 
-    if(cqe.get_flags() & IORING_CQE_F_MORE) {
-        std::cout << "more" << std::endl;
+    // TODO: is it suitable for any kind of io_uring op?
+    if(cqe.get_flags() & IORING_CQE_F_MORE)
         return;
-    }
-
-    std::cout << "got compl " << std::this_thread::get_id() << std::endl;
 
     typedef std::list<uring_res_ent>::iterator ent_it;
     std::list<uring_res_ent>& entries =
@@ -192,8 +188,8 @@ void io_service::M_uring_check_completion() {
 
     int id = cqe.get_data();
     int res = cqe.get_res();
-    std::cout << "RES " << res << " FLAG " << cqe.get_flags() << " DATA " << id << " SIZE " << entries.size()  << std::endl;
-    cqe = uring_cqe(); /*erase cqe, so it removes from io_uring*/
+    cqe.seen(); /*erase cqe, so it is removed from io_uring*/
+
     // find entry among expected results
     ent_it iter = entries.begin();
     while(iter != entries.end()) {
@@ -210,7 +206,6 @@ void io_service::M_uring_check_completion() {
     entries.erase(iter);
 
     res_ent.set_res(res);
-    std::cout << "OUT" << std::endl;
 }
 
 // Returns ID to be set in uring_sq as data field
@@ -218,8 +213,6 @@ int io_service::M_uring_push_result(async_result<int>&& res) {
     if(!M_is_in_pool())
         throw std::runtime_error(
             "this thread has no uring in io_service");
-
-    std::cout << "pushing new uring async " << std::this_thread::get_id()  << std::endl;
 
     uring_res_ent new_ent(std::forward<async_result<int>>(res));
     int id = new_ent.get_id();

@@ -90,22 +90,6 @@ private:
     uring_cqe(const uring_cqe&) = delete;
     uring_cqe& operator=(const uring_cqe&) = delete;
 
-public:
-    uring_cqe()
-        : m_ring_owner()
-        , m_cqe_ptr()
-    {}
-
-    uring_cqe(uring_cqe&& other)
-        : m_ring_owner(std::move(other.m_ring_owner))
-        , m_cqe_ptr(std::move(other.m_cqe_ptr))
-    {}
-
-    uring_cqe& operator=(uring_cqe&& other) {
-        uring_cqe(std::move(other)).swap(*this);
-        return *this;
-    }
-
 // Used by uring
 private:
     uring_cqe(io_uring& owner, io_uring_cqe* cqe_ptr)
@@ -114,9 +98,32 @@ private:
     {}
 
 public:
+    uring_cqe()
+        : m_ring_owner(NULL)
+        , m_cqe_ptr(NULL)
+    {}
+
+    uring_cqe(uring_cqe&& other)
+        : uring_cqe()
+    {
+        swap(other); // TODO: find out if it is a proper move cstr
+    }
+
+    uring_cqe& operator=(uring_cqe&& other) {
+        uring_cqe(std::move(other)).swap(*this);
+        return *this;
+    }
+
     ~uring_cqe() {
         if(operator bool())
-            io_uring_cqe_seen(m_ring_owner, m_cqe_ptr);
+            seen();
+    }
+
+public:
+    void seen() {
+        io_uring_cqe_seen(m_ring_owner, m_cqe_ptr);
+        m_ring_owner = NULL;
+        m_cqe_ptr = NULL;
     }
 
 public:
@@ -135,7 +142,7 @@ public:
         return m_cqe_ptr->flags;
     }
 
-    operator bool()
+    operator bool() const
     { return m_ring_owner && m_cqe_ptr; }
 
 public:
@@ -147,7 +154,7 @@ public:
 
 private:
     void M_check_validity() const {
-        if(!m_cqe_ptr || !m_ring_owner)
+        if(!operator bool())
             throw std::runtime_error("uring_cqe is empty");
     }
 
@@ -192,7 +199,6 @@ public:
         }
 
         int existing_fd = *s_rings.begin();
-        std::cout << "creatin" << std::endl;
         uring_error err;
         io_uring_params params = {
             .flags = IORING_SETUP_ATTACH_WQ,
@@ -241,8 +247,7 @@ public:
             }
         }
         
-        std::cout << "VAL " << val << " RES " << cqe_ptr->res << std::endl;
-        assert(cqe_ptr != NULL && "cqe_ptr is null");
+        assert(cqe_ptr != NULL);
         cqe = uring_cqe(m_ring, cqe_ptr);
         return true;
     }

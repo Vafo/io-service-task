@@ -248,11 +248,9 @@ private:
                 M_uring_push_result(
                     std::forward<async_result<int>>(res));
         
-            std::cout << "Got task " << id << " "  << std::this_thread::get_id() << std::endl;
             // set id of uring completion
             sqe.set_data(id);
             ring.submit();
-            std::cout << "SUBMIT" << std::endl;
         };
     }
 
