@@ -2,23 +2,36 @@
 #define ASIO_SOCKET_HPP
 
 #include <liburing.h>
+#include <stdexcept>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "io_service.hpp"
 #include "endpoint.hpp"
+#include "uring.hpp"
 #include "uring_async.hpp"
 
 namespace io_service {
 namespace ip {
-
-// Forward Declaration
-class socket;
 
 namespace detail {
 
 // Forward declaration for acceptor.hpp
 template<typename CompHandler>
 class async_accept_comp;
+
+
+inline
+int setup_connect_socket() {
+    int fd;
+
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(fd < 0)
+        throw std::runtime_error(
+            "socket: could not create socket");
+
+    return fd;
+}
 
 
 class async_connect_init {
@@ -77,6 +90,11 @@ public:
 public:
     template<typename CompHandler>
     void async_connect(endpoint& ep, CompHandler&& comp) {
+        
+        if(m_fd == invalid_fd) {
+            m_fd = detail::setup_connect_socket();
+        }
+
         uring_async_poster poster(m_serv);
         poster.post(
             detail::async_connect_init{m_fd, ep},
