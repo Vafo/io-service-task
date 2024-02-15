@@ -161,7 +161,6 @@ private:
                 std::packaged_task<SignatureT>>(pack_task),
             std::forward<Args>(args)...);
 
-        // TODO: in order to reduce std::move, make argument rval ref?
         // push to global
         m_global_queue.push(std::move(new_task));
     }
@@ -201,7 +200,7 @@ private:
             std::move(as_res));
 
         // Push to global work queue
-        // TODO: consider assigning a priority to async tasks
+        // TODO: consider assigning a priority to async tasks. Related to common work queue
         dispatch(std::move(task));
     }
 

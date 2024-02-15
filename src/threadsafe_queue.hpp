@@ -63,7 +63,8 @@ public:
             m_tail = new_tail;
         }   
 
-        // TODO: is it fine to notify outside of any lock?
+        // Note: helgrind might warn
+        // on notifying cond_var without any lock
         m_data_cv.notify_one();
     }
 

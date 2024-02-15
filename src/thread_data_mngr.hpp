@@ -30,7 +30,7 @@ public:
 
 
     ~thread_data_mngr() {
-        // TODO: decide if unique_ptr.reset() is better or not
+        // Note: is reset() good enough?
         m_data_ptr_ref.reset();
     }
 

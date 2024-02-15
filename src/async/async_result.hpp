@@ -115,9 +115,7 @@ public:
     {}
 
 public:
-    // TODO: is there a better way to pass [res] as &&
-    // in order to reduce redundant construction 
-    // Should D and T be really the same?
+    // Note: Should D and T be really the same? what about conversion?
     template<typename D>
     std::enable_if_t<std::is_same_v<T,std::decay_t<D>>>
     set_result(D&& res) {

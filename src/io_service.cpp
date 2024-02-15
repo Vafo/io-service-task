@@ -140,9 +140,9 @@ void io_service::restart() {
         [this] () { m_global_queue.signal(); });
 }
 
-// TODO: Learn if perfect forwarding could be suitable here
 bool io_service::M_try_fetch_task(invocable& task) {
-    // TODO: fetch from local / others / global
+    // Note: future addition
+    // can fetch from local / others / global
     return m_global_queue.try_pop(task);
 }
 
