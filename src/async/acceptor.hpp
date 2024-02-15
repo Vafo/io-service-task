@@ -20,8 +20,6 @@ int socket_setup_accept();
 void socket_bind(int fd, in_port_t port);
 void socket_listen(int fd, int num_connections);
 
-} // namespace detail
-
 
 class async_accept_init {
 private:
@@ -73,6 +71,9 @@ public:
 
 }; // class async_accept_comp
 
+} // namespace detail
+
+
 class acceptor {
 private:
     io_service& m_serv;
@@ -98,8 +99,8 @@ public:
     void async_accept(CompHandler&& comp) {
         uring_async_poster poster(m_serv);        
         poster.post(
-            async_accept_init{m_fd},
-            async_accept_comp<CompHandler>{
+            detail::async_accept_init{m_fd},
+            detail::async_accept_comp<CompHandler>{
                 m_serv, std::forward<CompHandler>(comp)});
     }
 

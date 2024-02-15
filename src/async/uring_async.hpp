@@ -112,6 +112,8 @@ public:
     {} 
 
 public:
+    // AsyncOp is expected to have one argument: uring_sqe&
+    // CompHandler is expected to have one argument: int (cqe_res)
     template<typename AsyncOp, typename CompHandler>
     void post(AsyncOp&& op, CompHandler&& comp) {
         m_serv.post_uring_async(

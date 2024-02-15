@@ -181,13 +181,13 @@ void io_service::M_uring_check_completion() {
     if(cqe.get_flags() & IORING_CQE_F_MORE)
         return;
 
-    typedef std::list<uring_res_ent>::iterator ent_it;
-    std::list<uring_res_ent>& entries =
-        local_thread_data->m_uring_res_entrs;
-
     int id = cqe.get_data();
     int res = cqe.get_res();
     cqe.seen(); /*erase cqe, so it is removed from io_uring*/
+
+    typedef std::list<uring_res_ent>::iterator ent_it;
+    std::list<uring_res_ent>& entries =
+        local_thread_data->m_uring_res_entrs;
 
     // find entry among expected results
     ent_it iter = entries.begin();

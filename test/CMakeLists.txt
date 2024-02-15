@@ -4,4 +4,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(unit)
 
 # Test executables
-add_subdirectory(one_shot_connect)
+add_subdirectory(apps)
