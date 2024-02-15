@@ -66,7 +66,7 @@ public:
         if(cqe_res < 0)
             m_comp(cqe_res, socket{m_serv});
         else
-            m_comp(cqe_res, socket{m_serv, cqe_res});
+            m_comp(0, socket{m_serv, cqe_res});
     }
 
 }; // class async_accept_comp
