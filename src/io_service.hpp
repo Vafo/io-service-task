@@ -13,9 +13,7 @@
 #include "threadsafe_queue.hpp"
 #include "false_func.hpp"
 
-#include "async_result.hpp"
-#include "async_task.hpp"
-#include "uring.hpp"
+#include "uring_async.hpp"
 
 namespace io_service {
 
@@ -108,7 +106,6 @@ public:
 
 public:
     // Post/Dispatch tasks without future
-
     template<typename Callable, typename ...Args,
         typename return_type =
             std::result_of_t<std::decay_t<Callable>(std::decay_t<Args>...)>,
@@ -151,6 +148,10 @@ public:
     bool can_dispatch()
     { return M_is_in_pool(); }
 
+    // requirement of uring_async_poster
+    uring_async_core<io_service>&
+    get_local_uring_core();
+
 // Impl funcs
 private:
 
@@ -178,115 +179,6 @@ private:
 
     void M_check_validity() noexcept(false);
     void M_clear_tasks();
-
-    // uring related
-    uring& M_uring_get_local_ring();
-    int M_uring_push_result(async_result<int>&& res);
-    void M_uring_check_completion();
-
-// async related
-private:
-
-    template<
-        typename ResT,
-        typename AsyncOp, typename CompHandler>
-    void do_post_async(AsyncOp&& op, CompHandler&& comp)
-    {
-        async_result<ResT> as_res(
-            std::forward<CompHandler>(comp));
-
-        async_task task(
-            std::forward<AsyncOp>(op),
-            std::move(as_res));
-
-        // Push to global work queue
-        // TODO: consider assigning a priority to async tasks. Related to common work queue
-        dispatch(std::move(task));
-    }
-
-    template<typename AsyncOp, typename CompHandler>
-    void post_uring_async(
-        AsyncOp&& as_op,
-        CompHandler&& handler
-    ) {
-        do_post_async<int>(
-            get_uring_async_op(
-                std::forward<AsyncOp>(as_op)),
-            get_generic_async_comp<int>( /*will be dispatched*/
-                get_uring_async_comp(
-                    std::forward<CompHandler>(handler))));
-    }
-
-    template<typename ResT,
-        typename AsyncOp, typename CompHandler>
-    void post_generic_async(AsyncOp&& as_op, CompHandler&& comp) {
-        do_post_async<ResT>(
-            get_generic_async_op<ResT>(
-                std::forward<AsyncOp>(as_op)),
-            get_generic_async_comp<ResT>(
-                std::forward<CompHandler>(comp)));
-    }
-
-private:
-    template<typename AsyncOp,
-        typename std::enable_if_t<
-            std::is_invocable_v<AsyncOp, uring_sqe&>, int> = 0>
-    auto get_uring_async_op(AsyncOp&& op) {
-        return
-        [this, m_op(std::forward<AsyncOp>(op)) /*move into lambda*/]
-        (async_result<int>&& res) mutable {
-            uring& ring = M_uring_get_local_ring();
-            uring_sqe sqe = ring.get_sqe();
-            m_op(sqe);
-             
-            // add async_result entry to thread_local list
-            int id = 
-                M_uring_push_result(
-                    std::forward<async_result<int>>(res));
-        
-            // set id of uring completion
-            sqe.set_data(id);
-            ring.submit();
-        };
-    }
-
-    template<typename CompHandler,
-        typename std::enable_if_t<
-            std::is_invocable_v<CompHandler, int>, int> = 0>
-    auto get_uring_async_comp(CompHandler&& comp) {
-        return
-        [this, m_comp(std::forward<CompHandler>(comp))]
-        (async_result<int>&& res) mutable {
-            int val = res.get_result();
-            m_comp(val);
-        };
-    }
-
-    template<typename ResT, typename AsyncOp>
-    auto get_generic_async_op(AsyncOp&& op) {
-        return
-        [this, m_op(std::forward<AsyncOp>(op))]
-        (async_result<ResT>&& res) {
-            dispatch(
-                std::move(m_op),
-                std::forward<async_result<ResT>>(res));
-        };
-    }
-
-    template<typename ResT, typename CompHandler>
-    auto get_generic_async_comp(CompHandler&& comp) {
-        return
-        [this, m_comp(std::forward<CompHandler>(comp))]
-        (async_result<ResT>&& res) {
-            dispatch(
-                std::move(m_comp),
-                std::forward<async_result<ResT>>(res));
-        };
-    }
-
-private:
-    friend class uring_async_poster;
-    friend class generic_async_poster;
 
 }; // class io_service
 

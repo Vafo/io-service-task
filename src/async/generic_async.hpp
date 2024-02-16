@@ -2,11 +2,29 @@
 #define ASIO_GENERIC_ASYNC_HPP
 
 #include "async_result.hpp"
-#include "io_service.hpp"
+#include "base_async.hpp"
 #include <type_traits>
 
 namespace io_service {
 
+namespace detail {
+
+ 
+template<typename ResT, typename Executor, typename AsyncOp>
+auto get_generic_async_dispatcher(Executor& exec, AsyncOp&& op) {
+    return
+    [&exec = exec, m_op(std::forward<AsyncOp>(op))]
+    (async_result<ResT>&& res) {
+        exec.dispatch(
+            std::move(m_op),
+            std::forward<async_result<ResT>>(res));
+    };
+}
+
+
+// Allows user to have AsyncOp
+// signature to be simply ResT(),
+// as opposed to void(async_result<ResT>)
 template<typename ResT, typename AsyncOp, typename 
     std::enable_if_t<std::is_same_v<ResT, std::result_of_t<AsyncOp()>>,
 int> = 0>
@@ -33,26 +51,35 @@ make_async_op_wrapper(AsyncOp&& op) {
     return generic_async_op_wrapper<ResT, AsyncOp>(std::forward<AsyncOp>(op));
 }
 
-class generic_async_poster {
+} // namespace detail
+
+
+template<typename Executor>
+class generic_async_poster
+    : private base_async<Executor>
+{
 private:
-    io_service& m_serv;
+    typedef base_async<Executor> base_class;
 
 private:
     generic_async_poster(const generic_async_poster& other) = delete;
     generic_async_poster& operator=(const generic_async_poster& other) = delete;
 
 public:
-    generic_async_poster(io_service& serv)
-        : m_serv(serv)
+    generic_async_poster(Executor& exec)
+        : base_class(exec)
     {}
 
 public:
     template<typename ResT,
         typename AsyncOp, typename CompHandler>
     void post(AsyncOp&& op, CompHandler&& comp) {
-        m_serv.post_generic_async<ResT>(
-            std::forward<AsyncOp>(op),
-            std::forward<CompHandler>(comp));
+        Executor& exec = base_class::get_executor();
+        base_class::template post_async<ResT>(
+            detail::get_generic_async_dispatcher<ResT>(
+                exec, std::forward<AsyncOp>(op)),
+            detail::get_generic_async_dispatcher<ResT>(
+                exec, std::forward<CompHandler>(comp)));
     }
 
 }; // class generic_async_poster
