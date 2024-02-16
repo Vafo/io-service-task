@@ -5,9 +5,8 @@
 
 namespace io_service {
 namespace ip {
-namespace detail {
 
-int socket_setup_accept() {
+int acceptor::M_socket_setup_accept() {
     io_service_err err;
     int server_sock = ::socket(AF_INET, SOCK_STREAM, 0);
 
@@ -36,7 +35,7 @@ int socket_setup_accept() {
     return server_sock;
 }
 
-void socket_bind(int fd, in_port_t port) {
+void acceptor::M_socket_bind(int fd, in_port_t port) {
     io_service_err err;
 
     sockaddr_in addr;
@@ -45,7 +44,7 @@ void socket_bind(int fd, in_port_t port) {
     addr.sin_port = htons(port);
 
     err = 
-        bind(fd, (struct sockaddr*) &addr, sizeof(addr));
+        ::bind(fd, (struct sockaddr*) &addr, sizeof(addr));
 
     if(err)
         throw std::runtime_error(
@@ -53,17 +52,16 @@ void socket_bind(int fd, in_port_t port) {
 
 }
 
-void socket_listen(int fd, int num_connections) {
+void acceptor::M_socket_listen(int fd, int num_connections) {
     io_service_err err;
 
     err = 
-        listen(fd, num_connections);
+        ::listen(fd, num_connections);
 
     if(err)
         throw std::runtime_error(
             "could not listen socket");
 }
 
-} // namespace detail
 } // namespace ip
 } // namespace io_service

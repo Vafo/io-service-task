@@ -16,11 +16,6 @@ namespace ip {
 
 namespace detail {
 
-int socket_setup_accept();
-void socket_bind(int fd, in_port_t port);
-void socket_listen(int fd, int num_connections);
-
-
 class async_accept_init {
 private:
     int m_acceptor_fd;
@@ -85,15 +80,15 @@ public:
         , m_fd(-1)
     {
         // C code to init socket and etc
-        m_fd = detail::socket_setup_accept();
+        m_fd = M_socket_setup_accept();
     }
 
 public:
     void bind(in_port_t port)
-    { detail::socket_bind(m_fd, port); }
+    { M_socket_bind(m_fd, port); }
 
     void listen(int num_pending_con)
-    { detail::socket_listen(m_fd, num_pending_con); }
+    { M_socket_listen(m_fd, num_pending_con); }
 
     // TODO: consider giving multiple signatures of async_accept
     // async_accept(comphandler) & async_accept(socket&, comphandler)
@@ -105,6 +100,12 @@ public:
             detail::async_accept_comp<CompHandler>{
                 m_serv, std::forward<CompHandler>(comp)});
     }
+
+// Impl functions
+private:
+    int M_socket_setup_accept();
+    void M_socket_bind(int fd, in_port_t port);
+    void M_socket_listen(int fd, int num_connections);
 
 }; // class acceptor
 

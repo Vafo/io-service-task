@@ -33,7 +33,6 @@ public:
     {}
 
 public:
-
     std::enable_if_t<std::is_invocable_v<AsyncOp, async_result<ResT>>>
     exec()
     { m_op(std::move(m_res)); /*transfer ownership to async op*/ }

@@ -76,8 +76,8 @@ private:
     { return m_len; }
 
 private:
-friend class resolver;
-friend class detail::async_connect_init;
+    friend class resolver;
+    friend class detail::async_connect_init;
 
 }; // class endpoint
 

@@ -231,9 +231,8 @@ public:
     bool try_get_cqe(uring_cqe& cqe) {
         uring_error err;
         io_uring_cqe* cqe_ptr = NULL;
-        int val = 
+        err = 
             io_uring_peek_cqe(&m_ring, &cqe_ptr);
-        err = val;
 
         if(err) {
             if (err.value() == -EAGAIN) {

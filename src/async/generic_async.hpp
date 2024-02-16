@@ -8,19 +8,19 @@
 namespace io_service {
 
 namespace detail {
-
  
-template<typename ResT, typename Executor, typename AsyncOp>
-auto get_generic_async_dispatcher(Executor& exec, AsyncOp&& op) {
+// TODO: Find out if it is redundant
+// Dispatches OpT into Executor upon invocation of lambda
+template<typename ResT, typename Executor, typename OpT>
+auto get_generic_async_dispatcher(Executor& exec, OpT&& op) {
     return
-    [&exec = exec, m_op(std::forward<AsyncOp>(op))]
+    [&exec = exec, m_op(std::forward<OpT>(op))]
     (async_result<ResT>&& res) {
         exec.dispatch(
             std::move(m_op),
             std::forward<async_result<ResT>>(res));
     };
 }
-
 
 // Allows user to have AsyncOp
 // signature to be simply ResT(),
