@@ -21,19 +21,6 @@ template<typename CompHandler>
 class async_accept_comp;
 
 
-inline
-int setup_connect_socket() {
-    int fd;
-
-    fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(fd < 0)
-        throw std::runtime_error(
-            "socket: could not create socket");
-
-    return fd;
-}
-
-
 class async_connect_init {
 private:
     int m_sock_fd;
@@ -92,7 +79,7 @@ public:
     void async_connect(endpoint& ep, CompHandler&& comp) {
         
         if(m_fd == invalid_fd) {
-            m_fd = detail::setup_connect_socket();
+            m_fd = M_setup_socket(AF_INET/*ip4*/, SOCK_STREAM/*tcp*/);
         }
 
         uring_async_poster<io_service> poster(m_serv);
@@ -104,6 +91,11 @@ public:
 public:
     io_service& get_executor()
     { return m_serv; }
+
+
+// Impl funcs
+private:
+   int M_setup_socket(int family, int socktype); 
 
 private:
     template<typename CompHandler>
