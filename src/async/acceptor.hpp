@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "io_service.hpp"
-#include "uring.hpp"
+#include "uring_async.hpp"
 #include "socket.hpp"
 
 namespace io_service {
@@ -38,7 +38,7 @@ public:
         io_uring_prep_accept(
             sqe.get(),
             m_acceptor_fd,
-            NULL,
+            NULL, // TODO: consider adding peer info to save
             NULL,
             0);
     }
@@ -95,9 +95,11 @@ public:
     void listen(int num_pending_con)
     { detail::socket_listen(m_fd, num_pending_con); }
 
+    // TODO: consider giving multiple signatures of async_accept
+    // async_accept(comphandler) & async_accept(socket&, comphandler)
     template<typename CompHandler>
     void async_accept(CompHandler&& comp) {
-        uring_async_poster poster(m_serv);        
+        uring_async_poster<io_service> poster(m_serv);        
         poster.post(
             detail::async_accept_init{m_fd},
             detail::async_accept_comp<CompHandler>{

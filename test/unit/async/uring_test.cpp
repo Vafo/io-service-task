@@ -6,7 +6,6 @@
 
 #include "function.hpp"
 #include "io_service.hpp"
-#include "condition_variable"
 #include "resolver.hpp"
 #include "socket.hpp"
 #include "unique_lock.hpp"

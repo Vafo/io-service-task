@@ -95,7 +95,7 @@ public:
             m_fd = detail::setup_connect_socket();
         }
 
-        uring_async_poster poster(m_serv);
+        uring_async_poster<io_service> poster(m_serv);
         poster.post(
             detail::async_connect_init{m_fd, ep},
             std::forward<CompHandler>(comp));

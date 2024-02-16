@@ -80,12 +80,12 @@ public:
     }
 
     template<typename CompHandler, typename std::enable_if_t<
-        std::is_invocable_v<CompHandler,async_result<std::vector<endpoint>> >,
+        std::is_invocable_v<CompHandler,async_result<results_type> >,
         int> = 0>
     void async_resolve(std::string host, std::string port, CompHandler&& comp) {
-        generic_async_poster poster(m_serv);
+        generic_async_poster<io_service> poster(m_serv);
         poster.post<results_type>(
-            make_async_op_wrapper<results_type>(
+            ::io_service::detail::make_async_op_wrapper<results_type>(
                 std::bind(&resolver::resolve, this, std::move(host), std::move(port))),
             std::forward<CompHandler>(comp)); 
     }

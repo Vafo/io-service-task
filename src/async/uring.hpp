@@ -50,8 +50,6 @@ public:
 
 }; // class uring_error
 
-// Forward Declaration
-class uring;
 
 class uring_sqe {
 private:
@@ -102,9 +100,10 @@ public:
         , m_cqe_ptr(NULL)
     {}
 
+    // TODO: find out if it is a proper move cstr
     uring_cqe(uring_cqe&& other)
         : uring_cqe() // fill with nulls
-    { swap(other); } // TODO: find out if it is a proper move cstr
+    { swap(other); } // do primitive data types require explicit assignment?
 
     uring_cqe& operator=(uring_cqe&& other) {
         uring_cqe(std::move(other)).swap(*this);

@@ -14,6 +14,7 @@ class async_multi_connect_comp {
 private:
     typedef resolver::results_type::iterator eps_it_t;
     typedef resolver::results_type::size_type idx_t;
+
 private:
     socket& m_sock;
     eps_it_t m_cur;
@@ -52,7 +53,7 @@ public:
     void do_async_connect() {
         m_sock.async_connect(
             *m_cur,
-            async_multi_connect_comp{
+            async_multi_connect_comp{ // TODO: find a way to mitigate recreation of state
                 m_sock,
                 m_cur + 1, m_end,
                 std::move(m_comp)});
