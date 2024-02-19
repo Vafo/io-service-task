@@ -81,6 +81,7 @@ private:
     void handle_resolve(async_result<ip::resolver::results_type> res) {
         using namespace std::placeholders;
         m_eps = std::move(res.get_result());
+        m_sock.setup();
         ip::async_connect(m_sock, m_eps,
             std::bind(&socket_connector::handle_connect, this, _1));
     }

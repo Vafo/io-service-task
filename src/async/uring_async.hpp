@@ -92,7 +92,6 @@ public:
         int res = cqe.get_res();
         cqe.seen(); /*erase cqe, so it is removed from io_uring*/
 
-
         typedef std::list<detail::uring_res_ent>::iterator ent_it;
         std::list<detail::uring_res_ent>& entries =
             m_res_entrs;

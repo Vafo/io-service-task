@@ -1,7 +1,6 @@
 #ifndef ASIO_SOCKET_HPP
 #define ASIO_SOCKET_HPP
 
-#include <iostream>
 #include <liburing.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -9,13 +8,12 @@
 
 #include "io_service.hpp"
 #include "endpoint.hpp"
+#include "buffer.hpp"
 #include "uring.hpp"
 #include "uring_async.hpp"
 
 namespace io_service {
 namespace ip {
-
-typedef int uring_error_code;
 
 namespace detail {
 
@@ -104,7 +102,7 @@ public:
 
 template<typename CompHandler,
     typename std::enable_if_t<
-        std::is_invocable_v<CompHandler, uring_error_code, int>, int> = 0>
+        std::is_invocable_v<CompHandler, uring_error, int>, int> = 0>
 class async_io_completer {
 private:
     CompHandler m_comp;
@@ -116,9 +114,9 @@ public:
 
 public:
     void operator()(int cqe_res) {
-        uring_error_code err = 0;
+        uring_error err;
         if(cqe_res < 0) {
-            err = -cqe_res;
+            err = cqe_res;
         }
         m_comp(err, cqe_res);
     }

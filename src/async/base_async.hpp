@@ -32,7 +32,7 @@ protected:
 
         // TODO: consider assigning a priority to async tasks.
         // Related to common work queue
-        m_exec.dispatch(std::move(task));
+        m_exec.post(std::move(task));
     }
 
 protected:
