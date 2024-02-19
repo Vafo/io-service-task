@@ -1,5 +1,7 @@
 #include "socket.hpp"
 
+#include <stdexcept>
+
 namespace io_service {
 namespace ip {
 

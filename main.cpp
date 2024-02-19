@@ -1,8 +1,10 @@
 #include <iostream>
+#include <utility>
 #include <vector>
 #include <functional>
 #include <csignal>
 
+#include "buffer.hpp"
 #include "condition_variable.hpp"
 #include "jthread.hpp"
 #include "mutex.hpp"
@@ -15,11 +17,79 @@ void worker_func(io_service::io_service* service_ptr) {
     service_ptr->run();
 }
 
+class echo_connection {
+private:
+    io_service::ip::socket m_sock;
+    char m_raw_data[128];
+    size_t m_size;
+
+public:
+    explicit
+    echo_connection(io_service::ip::socket&& sock)
+        : m_sock(std::forward<io_service::ip::socket>(sock))
+    {}
+
+public:
+    void start_echo() {
+        M_init_read();
+    }
+
+private:
+    void M_init_read() {
+        using namespace std::placeholders;
+        m_sock.async_read_some(io_service::buffer(m_raw_data, sizeof(m_raw_data)),
+            std::bind(&echo_connection::M_handle_read, this, _1, _2));
+    }
+
+    void M_handle_read(io_service::ip::uring_error_code err, int size) {
+        if(err) {
+            std::cerr << "could not read " << strerror(err) << std::endl; 
+            return;
+        }
+
+        if(size == 0) {
+            // close connection
+            std::cerr << "read: finishing con" << std::endl;
+            return;
+        }
+
+        m_size = size;
+        M_init_write();
+    }
+
+    void M_init_write() {
+        using namespace std::placeholders;
+        m_sock.async_write_some(io_service::buffer(m_raw_data, m_size),
+            std::bind(&echo_connection::M_handle_write, this, _1, _2));
+    }
+
+    void M_handle_write(io_service::ip::uring_error_code err, int size) {
+        if(err) {
+            if (err == EPERM) {
+                std::cerr << "write: finishing con" << std::endl;
+                return;
+            }
+
+            std::cerr << "could not write " << strerror(err) << std::endl; 
+            return;
+        }
+
+        if(size != m_size) {
+            std::cerr << "short write " << size << " " << m_size << std::endl; 
+            return;
+        }
+
+        m_size = 0;
+        M_init_read();
+    }
+
+}; // class connection
+
 class connections_manager {
 private:
     io_service::io_service& m_serv;
     io_service::ip::acceptor m_ac;
-    std::vector<io_service::ip::socket> m_socks;
+    std::vector<echo_connection> m_cons;
 
     concurrency::mutex& m_cond_var_mut;
     concurrency::condition_variable& m_cond_var;
@@ -50,8 +120,13 @@ public:
 
 private:
     void handle_connection(int err, io_service::ip::socket sock) {
+        if(err) {
+            std::cerr << "could not connect err " << strerror(err) << std::endl;
+        }
         std::cout << "new connection" << std::endl;
-        m_socks.push_back(std::move(sock));
+        m_cons.push_back(echo_connection(std::move(sock)));
+
+        m_cons.back().start_echo();
 
         accept_connections();
     }
