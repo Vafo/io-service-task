@@ -58,7 +58,6 @@ private:
 
 
 // per thread object, which tracks uring_async tasks
-template<typename Executor>
 class uring_async_core {
 public:
     typedef 
@@ -69,12 +68,10 @@ private:
     uring m_ring;
     std::list<detail::uring_res_ent> m_res_entrs;
 
-    Executor& m_exec;
 
 public:
-    uring_async_core(Executor& exec)
+    uring_async_core()
         : m_ring(uring_shared_wq)
-        , m_exec(exec)
     {}
 
 public:
@@ -147,7 +144,7 @@ auto get_uring_async_op(Executor& exec, AsyncOp&& op) {
     // Note: Storing Executor reference
     [&exec = exec, m_op(std::forward<AsyncOp>(op)) /*move into lambda*/]
     (async_result<int>&& res) mutable {
-        uring_async_core<Executor>& core = exec.get_local_uring_core();
+        uring_async_core& core = exec.get_local_uring_core();
         uring& ring = core.get_ring();
         uring_sqe sqe = ring.get_sqe();
         m_op(sqe);

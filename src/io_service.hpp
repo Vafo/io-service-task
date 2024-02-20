@@ -149,7 +149,7 @@ public:
     { return M_is_in_pool(); }
 
     // requirement of uring_async_poster
-    uring_async_core<io_service>&
+    uring_async_core&
     get_local_uring_core();
 
 // Impl funcs

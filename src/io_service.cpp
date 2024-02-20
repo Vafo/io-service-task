@@ -13,15 +13,14 @@ namespace io_service {
 
 struct thread_data {
 public:
-    uring_async_core<io_service> m_uring_core;
+    uring_async_core m_uring_core;
     interrupt_handle m_int_handle;
 
 public:
     thread_data(
-        io_service& serv,
         interrupt_handle&& int_handle
     )
-        : m_uring_core(serv)
+        : m_uring_core()
         , m_int_handle(std::forward<interrupt_handle>(int_handle))
     {}
 
@@ -41,7 +40,6 @@ void io_service::run() {
     // thus, won't execute any tasks and return from run()
     // Alternative to throwing exception ^^^^^^^^^^^^^^^^^
     local_thread_data = std::make_unique<thread_data>(
-        *this,
         m_manager.make_handle()); // looks ugly
 
     // RAII release of pool-related worker data
@@ -50,7 +48,7 @@ void io_service::run() {
     auto is_stopped =
         [this] () { return local_thread_data->m_int_handle.is_stopped(); };
 
-    uring_async_core<io_service>& local_uring_core
+    uring_async_core& local_uring_core
         = local_thread_data->m_uring_core;
 
     // TODO: test if it really stops regardless of uring async
@@ -126,7 +124,7 @@ void io_service::M_clear_tasks() {
         std::move(m_global_queue));
 }
 
-uring_async_core<io_service>& io_service::get_local_uring_core() {
+uring_async_core& io_service::get_local_uring_core() {
     if(!M_is_in_pool())
         throw std::runtime_error(
             "this thread has no uring in io_service");
