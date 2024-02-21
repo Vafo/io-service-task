@@ -3,7 +3,8 @@
 
 #include <fstream>
 #include <ios>
-#include <thread>
+#include <atomic>
+#include <chrono>
 
 #include "lock_guard.hpp"
 #include "mutex.hpp"
@@ -39,6 +40,7 @@ private:
     std::fstream m_file;
     concurrency::mutex m_mut;
 
+    static const std::chrono::time_point<std::chrono::system_clock> s_begin;
     static thread_local detail::local_id s_local_id;
 
 public:
@@ -49,14 +51,33 @@ public:
 public:
     void log(std::string msg) {
         using namespace concurrency;
+        using nanos = std::chrono::nanoseconds;
         lock_guard<mutex> lk(m_mut);
 
+        auto now = std::chrono::system_clock::now();
         m_file
+            << std::chrono::duration_cast<nanos>(now - s_begin).count() << ": "
             << "thread " << s_local_id.get_id() << ": "
             << msg << std::endl;
     }
 
 }; // class logger
+
+class global_logger {
+private:
+    static logger m_logger;
+    std::string m_prefix;
+
+public:
+    global_logger(std::string prefix)
+        : m_prefix(std::move(prefix))
+    {}
+
+public:
+    void log(std::string msg) 
+    { m_logger.log(m_prefix + std::move(msg)); }
+
+}; // class global_logger
 
 } // namespace io_service
 
