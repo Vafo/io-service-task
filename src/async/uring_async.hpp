@@ -53,7 +53,6 @@ private:
 }; // class uring_res_ent
 
 
-
 } // namespace detail
 
 
@@ -159,15 +158,20 @@ auto get_uring_async_op(Executor& exec, AsyncOp&& op) {
     };
 }
 
-template<typename CompHandler,
+template<typename Executor, typename CompHandler,
     typename std::enable_if_t<
         std::is_invocable_v<CompHandler, int>, int> = 0>
-auto get_uring_async_comp(CompHandler&& comp) {
+auto get_uring_async_comp(Executor& exec, CompHandler&& comp) {
     return
-    [m_comp(std::forward<CompHandler>(comp))]
+    [&exec = exec, m_comp(std::forward<CompHandler>(comp))]
     (async_result<int>&& res) mutable {
         int val = res.get_result();
         m_comp(val);
+        /*
+        exec.post(
+            std::move(m_comp),
+            val);
+        */
     };
 }
 
@@ -196,7 +200,19 @@ public:
             detail::get_uring_async_op(
                 exec, std::forward<AsyncOp>(op)),
             detail::get_uring_async_comp(
-                std::forward<CompHandler>(comp)));
+                exec, std::forward<CompHandler>(comp)));
+    }
+
+    // AsyncOp is expected to have one argument: uring_sqe&
+    // CompHandler is expected to have one argument: int (cqe_res)
+    template<typename AsyncOp, typename CompHandler>
+    void dispatch(AsyncOp&& op, CompHandler&& comp) {
+        Executor& exec = base_class::get_executor();
+        base_class::template dispatch_async<int>(
+            detail::get_uring_async_op(
+                exec, std::forward<AsyncOp>(op)),
+            detail::get_uring_async_comp(
+                exec, std::forward<CompHandler>(comp)));
     }
 
 }; // class uring_async_poster

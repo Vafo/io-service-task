@@ -35,6 +35,23 @@ protected:
         m_exec.post(std::move(task));
     }
 
+    template<
+        typename ResT,
+        typename AsyncOp, typename CompHandler>
+    void dispatch_async(AsyncOp&& op, CompHandler&& comp) {
+        async_result<ResT> as_res(
+            std::forward<CompHandler>(comp));
+
+        async_task task(
+            std::forward<AsyncOp>(op),
+            std::move(as_res));
+
+        // TODO: consider assigning a priority to async tasks.
+        // Related to common work queue
+        m_exec.dispatch(std::move(task));
+    }
+
+
 protected:
     Executor& get_executor()
     { return m_exec; }
