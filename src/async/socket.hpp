@@ -12,6 +12,8 @@
 #include "uring.hpp"
 #include "uring_async.hpp"
 
+#include "uring_error.hpp"
+
 namespace io_service {
 namespace ip {
 

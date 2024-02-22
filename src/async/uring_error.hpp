@@ -1,30 +1,32 @@
-#ifndef ASIO_IO_SERVICE_ERR_HPP
-#define ASIO_IO_SERVICE_ERR_HPP
+#ifndef ASIO_DETAIL_URING_ERROR_HPP
+#define ASIO_DETAIL_URING_ERROR_HPP
 
 #include "cerror_code.hpp"
+
+#include <string>
 #include <cstring>
 
 namespace io_service {
 
 inline
-std::string io_service_err_msg_gen(const char* prefix, int retval) {
+std::string uring_error_msg_gen(const char* prefix, int retval) {
     std::string msg(prefix);
     msg += ": ";
-    msg += strerror(retval);
+    msg += strerror(-retval);
     return msg;
 }
 
-class io_service_err
+class uring_error
     : public concurrency::util::cerror_code<int>
 {
 private:
     typedef concurrency::util::cerror_code<int> base_class;
 
 public:
-    io_service_err()
+    uring_error()
         : base_class(
-            "io_service",
-            io_service_err_msg_gen,
+            "io_uring",
+            uring_error_msg_gen,
             0)
     {}
 
@@ -35,7 +37,7 @@ public:
     operator bool() const
     { return base_class::operator bool(); }
 
-}; // class io_service_err
+}; // class uring_error
 
 } // namespace io_service
 
