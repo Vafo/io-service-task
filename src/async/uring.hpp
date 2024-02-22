@@ -163,14 +163,89 @@ private:
 struct uring_shared_wq_t {};
 constexpr uring_shared_wq_t uring_shared_wq;
 
-// io_uring wrapper
-class uring {
+namespace detail {
+
+class uring_storage {
 private:
-    static std::list<int> s_rings;
-    static concurrency::mutex s_rings_mut;
+    concurrency::mutex s_rings_mut;
+    std::list<int> s_rings;
+
+public:
+    void attach(io_uring& ring) {
+        using namespace concurrency;
+        unique_lock<mutex> lk(s_rings_mut);
+        
+        if(s_rings.empty()) {
+            // create a ring and insert fd into list
+            setup_solo_ring(ring);
+            s_rings.push_back(ring.ring_fd);
+            return;
+        }
+
+        int existing_fd = *s_rings.begin();
+        uring_error err;
+        io_uring_params params = {
+            .flags = IORING_SETUP_ATTACH_WQ,
+            .wq_fd = static_cast<__u32>(existing_fd) 
+        };
+        err = io_uring_queue_init_params(ASIO_URING_ENTRIES, &ring, &params);
+
+        // if could not create io_uring
+        if(err)
+            err.throw_exception();
+    }
+
+    void detach(io_uring& ring) {
+        using namespace concurrency;
+        unique_lock<mutex> lk(s_rings_mut);
+
+        int fd = ring.ring_fd;
+        io_uring_queue_exit(&ring);
+
+        s_rings.remove(fd);
+    }
+
+public:
+    void setup_solo_ring(io_uring& ring) {
+        uring_error err;
+        err = io_uring_queue_init(ASIO_URING_ENTRIES, &ring, 0);
+
+        if(err)
+            err.throw_exception();
+    }
+
+}; // class uring_storage
+
+class scoped_uring {
+private:
+    static uring_storage S_storage;
 
 private:
     io_uring m_ring;    
+
+public:
+    scoped_uring()
+    { S_storage.setup_solo_ring(m_ring); }
+
+    scoped_uring(uring_shared_wq_t)
+    { S_storage.attach(m_ring); }
+
+    ~scoped_uring()
+    { S_storage.detach(m_ring); }
+
+public:
+    io_uring& get_ring()
+    { return m_ring; }
+
+}; // class scoped_uring
+
+} // namespace detail
+
+
+// io_uring wrapper
+class uring {
+private:
+    detail::scoped_uring m_scoped_ring;
 
 private:
     uring(const uring& other) = delete;
@@ -181,48 +256,20 @@ private:
 
 public:
     uring()
-    { m_setup_solo_ring(); }
+        : m_scoped_ring()
+    {} 
 
-    uring(uring_shared_wq_t) {
-        using namespace concurrency;
-        unique_lock<mutex> lk(s_rings_mut);
-        
-        if(s_rings.empty()) {
-            // create a ring and insert fd into list
-            m_setup_solo_ring();
-            s_rings.push_back(m_ring.ring_fd);
-            return;
-        }
-
-        int existing_fd = *s_rings.begin();
-        uring_error err;
-        io_uring_params params = {
-            .flags = IORING_SETUP_ATTACH_WQ,
-            .wq_fd = static_cast<__u32>(existing_fd) 
-        };
-        err = io_uring_queue_init_params(ASIO_URING_ENTRIES, &m_ring, &params);
-
-        // if could not create io_uring
-        if(err)
-            err.throw_exception();
-    }
-
-    ~uring() {
-        using namespace concurrency;
-        unique_lock<mutex> lk(s_rings_mut);
-
-        int fd = m_ring.ring_fd;
-        io_uring_queue_exit(&m_ring);
-
-        s_rings.remove(fd);
-    }
+    uring(uring_shared_wq_t)
+        : m_scoped_ring(uring_shared_wq)
+    {}
 
 public:
     uring_sqe get_sqe() {
-        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+        io_uring& ring = m_scoped_ring.get_ring();
+        io_uring_sqe* sqe = io_uring_get_sqe(&ring);
         if(!sqe) {
             submit();
-            sqe = io_uring_get_sqe(&m_ring);
+            sqe = io_uring_get_sqe(&ring);
         }
 
         return uring_sqe(sqe);
@@ -230,9 +277,11 @@ public:
 
     bool try_get_cqe(uring_cqe& cqe) {
         uring_error err;
+        io_uring& ring = m_scoped_ring.get_ring();
+
         io_uring_cqe* cqe_ptr = NULL;
         err = 
-            io_uring_peek_cqe(&m_ring, &cqe_ptr);
+            io_uring_peek_cqe(&ring, &cqe_ptr);
 
         if(err) {
             if (err.value() == -EAGAIN) {
@@ -243,24 +292,17 @@ public:
         }
         
         assert(cqe_ptr != NULL);
-        cqe = uring_cqe(m_ring, cqe_ptr);
+        cqe = uring_cqe(ring, cqe_ptr);
         return true;
     }
 
 public:
     void submit() {
-        io_uring_submit(&m_ring);
+        io_uring& ring = m_scoped_ring.get_ring();
+        io_uring_submit(&ring);
     }
 
 private:
-    void m_setup_solo_ring() {
-        uring_error err;
-        err = io_uring_queue_init(ASIO_URING_ENTRIES, &m_ring, 0);
-
-        // if could not create io_uring
-        if(err)
-            err.throw_exception();
-    }
 
 }; // class uring
 

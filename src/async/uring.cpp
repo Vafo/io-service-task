@@ -4,7 +4,6 @@
 namespace io_service {
 
 // Used for share io wq
-std::list<int> uring::s_rings;
-concurrency::mutex uring::s_rings_mut;
+uring_storage scoped_uring::S_storage;
 
 } // namespace io_service
