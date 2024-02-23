@@ -149,49 +149,18 @@ public:
     {}
 
 public:
-    uring_sqe get_sqe() {
-        io_uring& ring = m_scoped_ring.get_ring();
-        io_uring_sqe* sqe = io_uring_get_sqe(&ring);
-        if(!sqe) {
-            submit();
-            sqe = io_uring_get_sqe(&ring);
-        }
+    inline uring_sqe get_sqe();
 
-        return uring_sqe(sqe);
-    }
-
-    bool try_get_cqe(uring_cqe& cqe) {
-        uring_error err;
-        io_uring& ring = m_scoped_ring.get_ring();
-
-        io_uring_cqe* cqe_ptr = NULL;
-        err = 
-            io_uring_peek_cqe(&ring, &cqe_ptr);
-
-        if(err) {
-            if (err.value() == -EAGAIN) {
-                return false;
-            } else {
-                err.throw_exception();
-            }
-        }
-        
-        assert(cqe_ptr != NULL);
-        cqe = uring_cqe(ring, cqe_ptr);
-        return true;
-    }
+    inline bool try_get_cqe(uring_cqe& cqe);
 
 public:
-    void submit() {
-        io_uring& ring = m_scoped_ring.get_ring();
-        io_uring_submit(&ring);
-    }
-
-private:
+    inline void submit();
 
 }; // class uring
 
 } // namespace io_service
+
+#include "impl/uring.ipp"
 
 #endif
 
